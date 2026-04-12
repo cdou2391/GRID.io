@@ -372,6 +372,12 @@ body {
   background: rgba(232, 160, 32, .12);
 }
 
+.vp-btn.mute.active {
+  color: var(--accent2);
+  border-color: var(--accent2);
+  background: rgba(32, 184, 232, .12);
+}
+
 /* ── RESIZE HANDLE ── */
 .vp-resize {
   position: absolute;

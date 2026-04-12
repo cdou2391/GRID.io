@@ -6,6 +6,33 @@ const canvasInner = document.getElementById('canvas-inner');
 const empty = document.getElementById('empty');
 const panelCount = document.getElementById('panel-count');
 
+// ── LOCAL STORAGE ──
+const LS_KEY = 'gridio_board';
+
+function saveState() {
+    try {
+        localStorage.setItem(LS_KEY, JSON.stringify({ panels, nextId, zTop }));
+    } catch (e) { /* storage full / private mode */ }
+}
+
+function loadState() {
+    try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (!raw) return false;
+        const { panels: saved, nextId: sid, zTop: sz } = JSON.parse(raw);
+        if (!Array.isArray(saved) || saved.length === 0) return false;
+        nextId = sid ?? nextId;
+        zTop = sz ?? zTop;
+        saved.forEach(p => {
+            panels.push(p);
+            renderPanel(p);
+        });
+        updateCount();
+        empty.style.display = 'none';
+        return true;
+    } catch (e) { return false; }
+}
+
 // ── URL CONVERSION ──
 const BLOCKED = ['netflix.com', 'disneyplus.com', 'hulu.com', 'primevideo.com', 'amazon.com/gp/video', 'hbomax.com', 'max.com', 'peacocktv.com', 'paramountplus.com', 'apple.com/tv'];
 
@@ -13,14 +40,17 @@ function detectBlocked(url) {
     return BLOCKED.some(b => url.includes(b));
 }
 
-function convertToEmbed(url) {
+function convertToEmbed(url, muted = false) {
+    const muteYT = muted ? '&mute=1' : '';
+    const muteVimeo = muted ? '&muted=1' : '';
+
     // YouTube
     const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-    if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=0&rel=0`;
+    if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=0&rel=0${muteYT}`;
 
     // Vimeo
     const vi = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-    if (vi) return `https://player.vimeo.com/video/${vi[1]}`;
+    if (vi) return `https://player.vimeo.com/video/${vi[1]}?${muteVimeo}`;
 
     // Dailymotion
     const dm = url.match(/dailymotion\.com\/video\/([a-zA-Z0-9]+)/);
@@ -40,6 +70,10 @@ function convertToEmbed(url) {
     }
 
     return url; // use as-is
+}
+
+function supportsEmbedMute(url) {
+    return /youtube\.com|youtu\.be|vimeo\.com/.test(url);
 }
 
 // ── OVERLAP UTILS ──
@@ -111,6 +145,7 @@ function tileAll() {
             setTimeout(() => el.style.transition = '', 400);
         }
     });
+    saveState();
     showToast('⊞ Panels tiled');
 }
 
@@ -131,11 +166,12 @@ function addPanel() {
     const id = nextId++;
     const w = 480, h = 310;
     const { x, y } = findFreePosition(w, h);
-    const panel = { id, label, raw, embedUrl, blocked, x, y, w, h, z: ++zTop, pinned: false };
+    const panel = { id, label, raw, embedUrl, blocked, x, y, w, h, z: ++zTop, pinned: false, muted: false };
 
     panels.push(panel);
     renderPanel(panel);
     updateCount();
+    saveState();
 
     urlInput.value = '';
     titleInput.value = '';
@@ -156,6 +192,7 @@ function removePanel(id) {
     panels = panels.filter(p => p.id !== id);
     document.getElementById('vp-' + id)?.remove();
     updateCount();
+    saveState();
     if (panels.length === 0) empty.style.display = '';
 }
 
@@ -168,6 +205,7 @@ function clearAll() {
     panels.forEach(p => document.getElementById('vp-' + p.id)?.remove());
     panels = [];
     updateCount();
+    saveState();
     empty.style.display = '';
 }
 
@@ -187,12 +225,17 @@ function renderPanel(p) {
   </div>`
         : `<iframe src="${p.embedUrl}" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
 
+    const muteIcon = p.muted ? '🔇' : '🔊';
+    const muteTitle = p.muted ? 'Unmute' : 'Mute';
+    const muteBtn = p.blocked ? '' : `<button class="vp-btn mute${p.muted ? ' active' : ''}" id="mute-${p.id}" title="${muteTitle}" onclick="toggleMute(${p.id})">${muteIcon}</button>`;
+
     el.innerHTML = `
 <div class="vp-header" id="hdr-${p.id}">
   <div class="vp-dot"></div>
   <div class="vp-title">${escHtml(p.label)}</div>
   <div class="vp-actions">
-    <button class="vp-btn pin" id="pin-${p.id}" title="Lock position &amp; size" onclick="togglePin(${p.id})">📌</button>
+    ${muteBtn}
+    <button class="vp-btn pin${p.pinned ? ' active' : ''}" id="pin-${p.id}" title="${p.pinned ? 'Unlock position &amp; size' : 'Lock position &amp; size'}" onclick="togglePin(${p.id})">📌</button>
     <button class="vp-btn" title="Open in new tab" onclick="window.open('${escHtml(p.raw)}','_blank')">↗</button>
     <button class="vp-btn close" title="Remove" onclick="removePanel(${p.id})">✕</button>
   </div>
@@ -208,10 +251,45 @@ function renderPanel(p) {
     makeDraggable(el, document.getElementById('hdr-' + p.id), p);
     makeResizable(el, document.getElementById('rsz-' + p.id), p);
     bringToFront(el, p);
+
+    // Apply pinned state if restored from storage
+    if (p.pinned) {
+        el.classList.add('pinned');
+    }
 }
 
 function escHtml(s) {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ── MUTE / UNMUTE ──
+function toggleMute(id) {
+    const p = panels.find(p => p.id === id);
+    if (!p || p.blocked) return;
+
+    if (!supportsEmbedMute(p.raw)) {
+        showToast('Mute not supported for this service', true);
+        return;
+    }
+
+    p.muted = !p.muted;
+    p.embedUrl = convertToEmbed(p.raw, p.muted);
+
+    // Reload the iframe with new src
+    const body = document.querySelector(`#vp-${id} .vp-body`);
+    if (body) {
+        body.innerHTML = `<iframe src="${p.embedUrl}" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+    }
+
+    const btn = document.getElementById('mute-' + id);
+    if (btn) {
+        btn.textContent = p.muted ? '🔇' : '🔊';
+        btn.title = p.muted ? 'Unmute' : 'Mute';
+        btn.classList.toggle('active', p.muted);
+    }
+
+    saveState();
+    showToast(p.muted ? '🔇 Muted' : '🔊 Unmuted');
 }
 
 // ── DRAG ──
@@ -230,9 +308,6 @@ function makeDraggable(el, handle, p) {
 
         const move = e => {
             if (!dragging) return;
-            const dx = e.clientX - startX + canvas.scrollLeft - 0;
-            const dy = e.clientY - startY + canvas.scrollTop - 0;
-            // Recalculate relative to canvas scroll
             p.x = Math.max(0, ox + (e.clientX - startX));
             p.y = Math.max(0, oy + (e.clientY - startY));
             el.style.left = p.x + 'px';
@@ -242,6 +317,7 @@ function makeDraggable(el, handle, p) {
             dragging = false;
             el.classList.remove('dragging');
             resolveCollisions(p);
+            saveState();
             document.removeEventListener('mousemove', move);
             document.removeEventListener('mouseup', up);
         };
@@ -269,6 +345,7 @@ function makeResizable(el, handle, p) {
         const up = () => {
             el.classList.remove('resizing');
             resolveCollisions(p);
+            saveState();
             document.removeEventListener('mousemove', move);
             document.removeEventListener('mouseup', up);
         };
@@ -287,6 +364,7 @@ function togglePin(id) {
     el.classList.toggle('pinned', p.pinned);
     btn.classList.toggle('active', p.pinned);
     btn.title = p.pinned ? 'Unlock position & size' : 'Lock position & size';
+    saveState();
     showToast(p.pinned ? '📌 Panel locked' : '🔓 Panel unlocked');
 }
 
@@ -296,9 +374,56 @@ function bringToFront(el, p) {
     el.style.zIndex = p.z;
 }
 
-// ── ENTER KEY ──
+// ── KEYBOARD SHORTCUTS ──
+document.addEventListener('keydown', e => {
+    // Ctrl+Enter or / — focus URL input (unless already in an input)
+    const tag = document.activeElement.tagName;
+    const inInput = tag === 'INPUT' || tag === 'TEXTAREA';
+
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        document.getElementById('url-input').focus();
+    }
+    if (e.key === '/' && !inInput) {
+        e.preventDefault();
+        document.getElementById('url-input').focus();
+    }
+});
+
+// ── ENTER KEY (inputs) ──
 document.getElementById('url-input').addEventListener('keydown', e => { if (e.key === 'Enter') addPanel(); });
 document.getElementById('title-input').addEventListener('keydown', e => { if (e.key === 'Enter') addPanel(); });
+
+// ── MIDDLE-CLICK PAN ──
+(function initMiddleClickPan() {
+    let panning = false, startX, startY, scrollLeft, scrollTop;
+
+    canvas.addEventListener('mousedown', e => {
+        if (e.button !== 1) return; // middle button only
+        e.preventDefault();
+        panning = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        scrollLeft = canvas.scrollLeft;
+        scrollTop = canvas.scrollTop;
+        canvas.style.cursor = 'grabbing';
+    });
+
+    document.addEventListener('mousemove', e => {
+        if (!panning) return;
+        canvas.scrollLeft = scrollLeft - (e.clientX - startX);
+        canvas.scrollTop = scrollTop - (e.clientY - startY);
+    });
+
+    document.addEventListener('mouseup', e => {
+        if (e.button !== 1) return;
+        panning = false;
+        canvas.style.cursor = '';
+    });
+
+    // Prevent the browser's "auto-scroll" mode on middle-click
+    canvas.addEventListener('auxclick', e => { if (e.button === 1) e.preventDefault(); });
+})();
 
 // ── TOAST ──
 let toastTimer;
@@ -315,15 +440,17 @@ function toggleHelp() {
     document.getElementById('help-panel').classList.toggle('open');
 }
 
-// ── DEMO PANEL ──
-(function seedDemo() {
-    const params = new URLSearchParams(location.search);
-    if (params.get('demo') !== '0') {
-        // Load a YouTube demo
-        document.getElementById('url-input').value = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
-        document.getElementById('title-input').value = 'Demo';
-        addPanel();
-        document.getElementById('url-input').value = '';
-        document.getElementById('title-input').value = '';
+// ── BOOT: restore or seed demo ──
+(function boot() {
+    const restored = loadState();
+    if (!restored) {
+        const params = new URLSearchParams(location.search);
+        if (params.get('demo') !== '0') {
+            document.getElementById('url-input').value = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+            document.getElementById('title-input').value = 'Demo';
+            addPanel();
+            document.getElementById('url-input').value = '';
+            document.getElementById('title-input').value = '';
+        }
     }
 })();
