@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GRID — Multi-Video Board</title>
+  <link rel="stylesheet" href="multi-video-board.css" />
+</head>
+
+<body>
+
+  <!-- TOP BAR -->
+  <div id="topbar">
+    <div id="logo">GRID<span>.io</span></div>
+
+    <div id="add-form">
+      <input id="title-input" type="text" placeholder="Label (optional)" autocomplete="off" />
+      <input id="url-input" type="text" placeholder="Paste video URL — YouTube, Twitch, Plex, Jellyfin…"
+        autocomplete="off" />
+      <button class="btn btn-accent" onclick="addPanel()">+ Add</button>
+    </div>
+
+    <button class="btn btn-ghost" onclick="tileAll()" title="Arrange all panels in a grid">⊞ Tile</button>
+    <button class="btn btn-ghost" id="help-btn" onclick="toggleHelp()">? Compat</button>
+    <button class="btn btn-ghost" onclick="clearAll()" style="color:var(--danger);border-color:var(--danger);">✕
+      Clear</button>
+    <div id="panel-count">0 panels</div>
+  </div>
+
+  <!-- HELP PANEL -->
+  <div id="help-panel">
+    <h3>Embedding Compatibility</h3>
+
+    <div class="row">
+      <div>
+        <div class="service-name">YouTube</div>
+        <div class="note">Auto-converted to embed URL.</div>
+      </div>
+      <span class="badge badge-ok">✓ Works</span>
+    </div>
+    <div class="row">
+      <div>
+        <div class="service-name">Twitch</div>
+        <div class="note">Use: twitch.tv/videos/ID</div>
+      </div>
+      <span class="badge badge-ok">✓ Works</span>
+    </div>
+    <div class="row">
+      <div>
+        <div class="service-name">Plex</div>
+        <div class="note">Use the embed/share URL from Plex.</div>
+      </div>
+      <span class="badge badge-ok">✓ Works</span>
+    </div>
+    <div class="row">
+      <div>
+        <div class="service-name">Jellyfin</div>
+        <div class="note">Use your server's /web/ URL.</div>
+      </div>
+      <span class="badge badge-ok">✓ Works</span>
+    </div>
+    <div class="row">
+      <div>
+        <div class="service-name">Vimeo</div>
+        <div class="note">Auto-converted to embed URL.</div>
+      </div>
+      <span class="badge badge-ok">✓ Works</span>
+    </div>
+    <div class="row">
+      <div>
+        <div class="service-name">Dailymotion</div>
+        <div class="note">Auto-converted to embed URL.</div>
+      </div>
+      <span class="badge badge-ok">✓ Works</span>
+    </div>
+    <div class="row">
+      <div>
+        <div class="service-name">Netflix</div>
+        <div class="note">Blocks all iframe embedding by design (X-Frame-Options).</div>
+      </div>
+      <span class="badge badge-no">✗ Blocked</span>
+    </div>
+    <div class="row">
+      <div>
+        <div class="service-name">Disney+</div>
+        <div class="note">Blocks all iframe embedding.</div>
+      </div>
+      <span class="badge badge-no">✗ Blocked</span>
+    </div>
+    <div class="row">
+      <div>
+        <div class="service-name">Hulu</div>
+        <div class="note">Blocks all iframe embedding.</div>
+      </div>
+      <span class="badge badge-no">✗ Blocked</span>
+    </div>
+    <div class="row">
+      <div>
+        <div class="service-name">Amazon Prime</div>
+        <div class="note">Blocks all iframe embedding.</div>
+      </div>
+      <span class="badge badge-no">✗ Blocked</span>
+    </div>
+    <div class="row">
+      <div>
+        <div class="service-name">Spotify</div>
+        <div class="note">Use open.spotify.com/embed/track/...</div>
+      </div>
+      <span class="badge badge-ok">✓ Works</span>
+    </div>
+
+    <div class="section">
+      <h3>Tips</h3>
+      <div class="note" style="margin-top:8px;">
+        • Drag panels by their header<br>
+        • Resize from the ↘ corner handle<br>
+        • YouTube &amp; Vimeo URLs are auto-converted<br>
+        • Self-hosted services (Plex, Jellyfin, Emby) work great<br>
+        • Any site without X-Frame-Options can be embedded
+      </div>
+    </div>
+  </div>
+
+  <!-- CANVAS -->
+  <div id="canvas">
+    <div id="canvas-inner">
+      <div id="empty">
+        <h2>GRID</h2>
+        <p>paste a url above to start</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toast"></div>
+
+  <script src="multi-video-board.js"></script>
+</body>
+
+</html>
