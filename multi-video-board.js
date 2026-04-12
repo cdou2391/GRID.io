@@ -216,6 +216,72 @@ function loadFromUrl() {
     } catch (e) { return false; }
 }
 
+// ── EXPORT / IMPORT ──
+async function exportHTML() {
+    if (panels.length === 0) { showToast('No panels to export', true); return; }
+    try {
+        // Fetch raw CSS and JS to inline them
+        const cssContent = await fetch('multi-video-board.css').then(r => r.text());
+        const jsContent = await fetch('multi-video-board.js').then(r => r.text());
+        let htmlContent = await fetch('multi-video-board.html').then(r => r.text());
+
+        // Avoid infinite recursion by removing export scripts, or just inline
+        htmlContent = htmlContent.replace('<link rel="stylesheet" href="multi-video-board.css" />', `<style>\n${cssContent}\n</style>`);
+        htmlContent = htmlContent.replace('<script src="multi-video-board.js"></script>', `<script>\nwindow.__GRIDIO_PRELOAD__ = ${JSON.stringify(panels)};\n${jsContent}\n</script>`);
+
+        const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const title = panels[0]?.label || 'board';
+        a.download = `gridio-${title.replace(/\\s+/g, '-').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.html`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('📤 Board exported as HTML');
+    } catch (e) {
+        showToast('Export failed. Ensure you are running on a local server.', true);
+    }
+}
+
+function importBoard() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.html,.json';
+    input.onchange = e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                let data;
+                const content = event.target.result;
+                if (file.name.endsWith('.json')) {
+                    data = JSON.parse(content);
+                } else {
+                    const match = content.match(/window\\.__GRIDIO_PRELOAD__\\s*=\\s*(\\[.*?\\]);/);
+                    if (match) data = JSON.parse(match[1]);
+                }
+
+                if (!Array.isArray(data) || data.length === 0) throw new Error();
+
+                // Load imported board
+                panels.forEach(p => document.getElementById('vp-' + p.id)?.remove());
+                panels = [];
+                nextId = Math.max(...data.map(d => d.id)) + 1 || 1;
+                data.forEach(p => { panels.push({ ...p }); renderPanel(p); });
+                updateCount();
+                empty.style.display = 'none';
+                saveState();
+                showToast(`📥 Imported layout from ${file.name}`);
+            } catch (err) {
+                showToast('Failed to parse imported file', true);
+            }
+        };
+        reader.readAsText(file);
+    };
+    input.click();
+}
+
 // ── COLOUR TAGS ──
 const TAG_COLORS = [null, '#e84040', '#e8a020', '#30d080', '#20b8e8', '#9b6bff', '#ff69b4'];
 
@@ -720,7 +786,24 @@ function toggleHelp() {
 (function boot() {
     refreshLayoutsSelect();
 
-    // Priority: URL param → localStorage → demo
+    // Priority: Embedded preload → URL param → localStorage → demo
+    if (window.__GRIDIO_PRELOAD__) {
+        try {
+            const data = window.__GRIDIO_PRELOAD__;
+            if (Array.isArray(data) && data.length > 0) {
+                nextId = Math.max(...data.map(d => d.id)) + 1 || 1;
+                data.forEach(p => { panels.push(p); renderPanel(p); });
+                updateCount();
+                empty.style.display = 'none';
+                saveState(); // Save to active local storage so it persists
+                showToast('📤 Board loaded from exported file');
+                return;
+            }
+        } catch (e) {
+            console.error('Failed to load embedded preload');
+        }
+    }
+
     if (!loadFromUrl()) {
         if (!loadState()) {
             const params = new URLSearchParams(location.search);

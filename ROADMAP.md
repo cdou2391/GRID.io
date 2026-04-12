@@ -29,4 +29,4 @@ Enhancement ideas tracked for future implementation.
 - [ ] **Picture-in-picture** — pop a panel out as the browser's native PiP window
 - [ ] **Customisable grid background** — toggle between dot grid, line grid, or blank canvas
 - [ ] **Panel search / filter** — search panels by label to highlight or jump to them
-- [ ] **Export as HTML** — generate a self-contained snapshot of the current board
+- [x] **Export as HTML** — generate a self-contained snapshot of the current board (plus json/html import)
