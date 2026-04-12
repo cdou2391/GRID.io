@@ -225,9 +225,8 @@ async function exportHTML() {
         const jsContent = await fetch('multi-video-board.js').then(r => r.text());
         let htmlContent = await fetch('multi-video-board.html').then(r => r.text());
 
-        // Avoid infinite recursion by removing export scripts, or just inline
         htmlContent = htmlContent.replace('<link rel="stylesheet" href="multi-video-board.css" />', `<style>\n${cssContent}\n</style>`);
-        htmlContent = htmlContent.replace('<script src="multi-video-board.js"></script>', `<script>\nwindow.__GRIDIO_PRELOAD__ = ${JSON.stringify(panels)};\n${jsContent}\n</script>`);
+        htmlContent = htmlContent.replace('<script src="multi-video-board.js"></script>', `<script>\n/*GRIDIO_EXPORT_START*/window.__GRIDIO_PRELOAD__ = ${JSON.stringify(panels)};/*GRIDIO_EXPORT_END*/\n${jsContent}\n</script>`);
 
         const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
         const url = URL.createObjectURL(blob);
@@ -258,8 +257,12 @@ function importBoard() {
                 if (file.name.endsWith('.json')) {
                     data = JSON.parse(content);
                 } else {
-                    const match = content.match(/window\\.__GRIDIO_PRELOAD__\\s*=\\s*(\\[.*?\\]);/);
-                    if (match) data = JSON.parse(match[1]);
+                    const startMarker = '/*GRIDIO_EXPORT_START*/window.__GRIDIO_PRELOAD__ = ';
+                    const endMarker = ';/*GRIDIO_EXPORT_END*/';
+                    if (content.includes(startMarker) && content.includes(endMarker)) {
+                        const jsonStr = content.split(startMarker)[1].split(endMarker)[0];
+                        data = JSON.parse(jsonStr);
+                    }
                 }
 
                 if (!Array.isArray(data) || data.length === 0) throw new Error();
@@ -513,6 +516,7 @@ function renderPanel(p) {
   <div class="vp-actions">
     ${tagBtn}
     ${muteBtn}
+    <button class="vp-btn focus-btn" id="focus-${p.id}" title="Toggle Focus" onclick="toggleFocus(${p.id})">⛶</button>
     <button class="vp-btn pin${p.pinned ? ' active' : ''}" id="pin-${p.id}" title="${p.pinned ? 'Unlock' : 'Lock'} position &amp; size" onclick="togglePin(${p.id})">📌</button>
     <button class="vp-btn" title="Open in new tab" onclick="window.open('${escHtml(p.raw)}','_blank')">↗</button>
     <button class="vp-btn close" title="Remove" onclick="removePanel(${p.id})">✕</button>
@@ -530,6 +534,7 @@ function renderPanel(p) {
     makeResizable(el, document.getElementById('rsz-' + p.id), p);
     bringToFront(el, p);
     if (p.pinned) el.classList.add('pinned');
+    if (p.focused) el.classList.add('focused');
     applyTag(p);
 }
 
@@ -662,6 +667,33 @@ function togglePin(id) {
     showToast(p.pinned ? '📌 Panel locked' : '🔓 Panel unlocked');
 }
 
+// ── FOCUS ──
+function toggleFocus(id) {
+    const p = panels.find(p => p.id === id);
+    if (!p) return;
+
+    // If clicking the currently focused panel, unfocus it
+    if (p.focused) {
+        p.focused = false;
+        document.getElementById('vp-' + id).classList.remove('focused');
+        saveState();
+        return;
+    }
+
+    // Otherwise focus this one, un-focus all others
+    panels.forEach(pan => {
+        if (pan.focused) {
+            pan.focused = false;
+            document.getElementById('vp-' + pan.id)?.classList.remove('focused');
+        }
+    });
+
+    p.focused = true;
+    document.getElementById('vp-' + id).classList.add('focused');
+    bringToFront(document.getElementById('vp-' + id), p); // bring focused above all
+    saveState();
+}
+
 // ── Z-INDEX ──
 function bringToFront(el, p) {
     p.z = ++zTop;
@@ -727,6 +759,12 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
         document.getElementById('ctx-menu').classList.remove('open');
         document.getElementById('help-panel').classList.remove('open');
+
+        // Escape un-focuses any currently focused panel
+        const focusedPanel = panels.find(p => p.focused);
+        if (focusedPanel) {
+            toggleFocus(focusedPanel.id);
+        }
     }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
