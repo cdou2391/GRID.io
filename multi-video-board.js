@@ -225,15 +225,19 @@ async function exportHTML() {
         const jsContent = await fetch('multi-video-board.js').then(r => r.text());
         let htmlContent = await fetch('multi-video-board.html').then(r => r.text());
 
+        // Escape </script> inside JSON so the HTML parser doesn't terminate the tag early
+        const safeJson = JSON.stringify(panels).replace(/<\/script>/gi, '<\\/script>');
         htmlContent = htmlContent.replace('<link rel="stylesheet" href="multi-video-board.css" />', `<style>\n${cssContent}\n</style>`);
-        htmlContent = htmlContent.replace('<script src="multi-video-board.js"></script>', `<script>\n/*GRIDIO_EXPORT_START*/window.__GRIDIO_PRELOAD__ = ${JSON.stringify(panels)};/*GRIDIO_EXPORT_END*/\n${jsContent}\n</script>`);
+        htmlContent = htmlContent.replace('<script src="multi-video-board.js"></script>',
+            `<script id="gridio-data" type="application/json">${safeJson}</script>\n` +
+            `<script>\nwindow.__GRIDIO_PRELOAD__ = JSON.parse(document.getElementById('gridio-data').textContent);\n${jsContent}\n</script>`);
 
         const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         const title = panels[0]?.label || 'board';
-        a.download = `gridio-${title.replace(/\\s+/g, '-').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.html`;
+        a.download = `gridio-${title.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.html`;
         a.click();
         URL.revokeObjectURL(url);
         showToast('📤 Board exported as HTML');
@@ -257,11 +261,15 @@ function importBoard() {
                 if (file.name.endsWith('.json')) {
                     data = JSON.parse(content);
                 } else {
-                    const startMarker = '/*GRIDIO_EXPORT_START*/window.__GRIDIO_PRELOAD__ = ';
-                    const endMarker = ';/*GRIDIO_EXPORT_END*/';
-                    if (content.includes(startMarker) && content.includes(endMarker)) {
-                        const jsonStr = content.split(startMarker)[1].split(endMarker)[0];
-                        data = JSON.parse(jsonStr);
+                    // Current format: dedicated <script id="gridio-data" type="application/json"> element
+                    const doc = new DOMParser().parseFromString(content, 'text/html');
+                    const dataEl = doc.getElementById('gridio-data');
+                    if (dataEl) {
+                        data = JSON.parse(dataEl.textContent);
+                    } else {
+                        // Legacy format: window.__GRIDIO_PRELOAD__ = [...]; injected at top of script block
+                        const match = content.match(/window\.__GRIDIO_PRELOAD__\s*=\s*(\[[\s\S]*?\]);/);
+                        if (match) data = JSON.parse(match[1]);
                     }
                 }
 
@@ -350,6 +358,10 @@ function convertToEmbed(url, muted = false) {
     if (url.includes('open.spotify.com') && !url.includes('/embed/')) {
         return url.replace('open.spotify.com/', 'open.spotify.com/embed/');
     }
+
+    // TikTok
+    const tt = url.match(/tiktok\.com\/@[\w.]+\/video\/(\d+)/);
+    if (tt) return `https://www.tiktok.com/embed/v2/${tt[1]}`;
 
     return url;
 }
@@ -445,7 +457,9 @@ function addPanel() {
     const embedUrl = blocked ? null : convertToEmbed(raw);
 
     const id = nextId++;
-    const w = 480, h = 310;
+    const isTikTok = /tiktok\.com/.test(raw);
+    const w = isTikTok ? 325 : 480;
+    const h = isTikTok ? 580 : 310;
     const { x, y } = findFreePosition(w, h);
     const panel = { id, label, raw, embedUrl, blocked, x, y, w, h, z: ++zTop, pinned: false, muted: false, tag: null };
 
@@ -849,6 +863,33 @@ function showToast(msg, err = false) {
 function toggleHelp() {
     document.getElementById('help-panel').classList.toggle('open');
 }
+
+// ── TIKTOK AUTO-RESIZE ──
+window.addEventListener('message', e => {
+    if (!e.origin.includes('tiktok.com')) return;
+    const panel = panels.find(p => {
+        const iframe = document.querySelector(`#vp-${p.id} iframe`);
+        return iframe && iframe.contentWindow === e.source;
+    });
+    if (!panel || panel.pinned) return;
+    try {
+        const msg = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+        const height = msg?.value?.height ?? msg?.height ?? msg?.data?.height;
+        const width  = msg?.value?.width  ?? msg?.width  ?? msg?.data?.width;
+        const el = document.getElementById('vp-' + panel.id);
+        if (!el) return;
+        const HEADER = 36;
+        if (height && height > 100) {
+            panel.h = Math.round(height) + HEADER;
+            el.style.height = panel.h + 'px';
+        }
+        if (width && width > 100) {
+            panel.w = Math.round(width);
+            el.style.width = panel.w + 'px';
+        }
+        if (height || width) saveState();
+    } catch { /* malformed message, ignore */ }
+});
 
 // ── BOOT ──
 (function boot() {
