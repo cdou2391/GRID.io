@@ -1,0 +1,100 @@
+[
+  {
+    "id": "global-news",
+    "label": "Global News",
+    "icon": "🌍",
+    "description": "International 24/7 news streams",
+    "panels": [
+      { "label": "Al Jazeera English","url": "https://www.youtube.com/live/gCNeDWCI0vo?si=q4f_KSIjxbOAXgsG",  "embed": "https://www.youtube.com/embed/gCNeDWCI0vo?autoplay=0&rel=0" },
+      { "label": "France 24 English", "url": "https://www.youtube.com/@FRANCE24English/live",   "embed": "https://www.youtube.com/embed/live_stream?channel=UCQfwfsi5VrQ8yKZ-UWmAEFg&autoplay=0&rel=0" },
+      { "label": "DW News",           "url": "https://www.youtube.com/@DWNews/live",            "embed": "https://www.youtube.com/embed/live_stream?channel=UCknLrEdhRCp1aegoMqRaCZg&autoplay=0&rel=0" },
+      { "label": "Euronews English",  "url": "https://www.youtube.com/live/pykpO5kQJ98?si=jsujAE-UHU8_UKIo", "embed": "https://www.youtube.com/embed/pykpO5kQJ98?autoplay=0&rel=0" },
+      { "label": "TRT World",         "url": "https://www.youtube.com/@TRTWorld/live",          "embed": "https://www.youtube.com/embed/live_stream?channel=UC7fWeaHhqgM4Ry-RMpM2YYw&autoplay=0&rel=0" }
+    ]
+  },
+  {
+    "id": "us-news",
+    "label": "US News",
+    "icon": "🇺🇸",
+    "description": "US broadcast and cable news",
+    "panels": [
+      { "label": "CNN Live",     "url": "https://www.youtube.com/@CNN/live",       "embed": "https://www.youtube.com/embed/live_stream?channel=UCupvZG-5ko_eiXAupbDfxWw&autoplay=0&rel=0" },
+      { "label": "NBC News Now", "url": "https://www.youtube.com/@NBCNews/live",   "embed": "https://www.youtube.com/embed/live_stream?channel=UCeY0bbntWzzVIaj2z3QigXg&autoplay=0&rel=0" },
+      { "label": "ABC News Live","url": "https://www.youtube.com/@ABCNews/live",   "embed": "https://www.youtube.com/embed/live_stream?channel=UCBi2mrWuNuyYy4gbM6fU18Q&autoplay=0&rel=0" },
+      { "label": "Bloomberg TV", "url": "https://www.youtube.com/@Bloomberg/live", "embed": "https://www.youtube.com/embed/live_stream?channel=UCIALMKvObZNtJ6AmdCLP7Hg&autoplay=0&rel=0" },
+      { "label": "CNBC",         "url": "https://www.youtube.com/@CNBC/live",      "embed": "https://www.youtube.com/embed/live_stream?channel=UCrp_UI8XtuYfpiqluWLD7Lw&autoplay=0&rel=0" }
+    ]
+  },
+  {
+    "id": "uk-news",
+    "label": "UK News",
+    "icon": "🇬🇧",
+    "description": "British news channels",
+    "panels": [
+      { "label": "Sky News",    "url": "https://www.youtube.com/live/YDvsBbKfLPA?si=rTDVQ77xv-xn6DWN", "embed": "https://www.youtube.com/embed/YDvsBbKfLPA?autoplay=0&rel=0" },
+      { "label": "GB News",     "url": "https://www.youtube.com/live/QliL4CGc7iY?si=LWNsIQwUQCCRwana", "embed": "https://www.youtube.com/embed/QliL4CGc7iY?autoplay=0&rel=0" }
+    ]
+  },
+  {
+    "id": "sports",
+    "label": "Sports",
+    "icon": "⚽",
+    "description": "Live sports channels and streams",
+    "panels": [
+      { "label": "ESPN",         "url": "https://www.twitch.tv/espn" },
+      { "label": "Sky Sports",   "url": "https://www.youtube.com/@SkySports/live",  "embed": "https://www.youtube.com/embed/live_stream?channel=UCNAf1k0yIjyGu3k9BwAg3lg&autoplay=0&rel=0" },
+      { "label": "beIN Sports",  "url": "https://www.youtube.com/@beinSPORTS/live", "embed": "https://www.youtube.com/embed/live_stream?channel=UCKbKMGfFGx-TBGBk7HBW1-w&autoplay=0&rel=0" },
+      { "label": "Eurosport",    "url": "https://www.youtube.com/@Eurosport/live",  "embed": "https://www.youtube.com/embed/live_stream?channel=UCVOBEblPz0IaYhqolRKqEHg&autoplay=0&rel=0" },
+      { "label": "Olympic Channel","url": "https://www.youtube.com/@Olympics/live", "embed": "https://www.youtube.com/embed/live_stream?channel=UCTl3QQTvqHFjurroKxexy2Q&autoplay=0&rel=0" }
+    ]
+  },
+  {
+    "id": "gaming",
+    "label": "Gaming",
+    "icon": "🎮",
+    "description": "Esports and gaming live streams",
+    "panels": [
+      { "label": "Riot Games",   "url": "https://www.twitch.tv/riotgames" },
+      { "label": "ESL FACEIT",   "url": "https://www.twitch.tv/eslfaceit" },
+      { "label": "Xbox",         "url": "https://www.twitch.tv/xbox" },
+      { "label": "PlayStation",  "url": "https://www.twitch.tv/playstation" },
+      { "label": "Nintendo",     "url": "https://www.twitch.tv/nintendo" }
+    ]
+  },
+  {
+    "id": "music",
+    "label": "Music",
+    "icon": "🎵",
+    "description": "24/7 music streams and live radio",
+    "panels": [
+      { "label": "Lofi Girl",          "url": "https://www.youtube.com/watch?v=jfKfPfyJRdk" },
+      { "label": "Chillhop Music",     "url": "https://www.youtube.com/watch?v=5yx6BWlEVcY" },
+      { "label": "Cafe Music BGM",     "url": "https://www.youtube.com/watch?v=dvgZkm1xWPE" },
+      { "label": "NTS Radio",          "url": "https://www.youtube.com/@NTSRadio/live",    "embed": "https://www.youtube.com/embed/live_stream?channel=UCXxm_HDMKLGfX3c-2mUhyMg&autoplay=0&rel=0" },
+      { "label": "NPR Music",          "url": "https://www.youtube.com/@nprmusic/live",    "embed": "https://www.youtube.com/embed/live_stream?channel=UCsZ3JumVDB6RNr7PYA_LPWQ&autoplay=0&rel=0" }
+    ]
+  },
+  {
+    "id": "tech",
+    "label": "Technology",
+    "icon": "💻",
+    "description": "Tech events and conference streams",
+    "panels": [
+      { "label": "NASA TV",          "url": "https://www.youtube.com/@NASA/live",          "embed": "https://www.youtube.com/embed/live_stream?channel=UCLA_DiR1FfKNviFMD9PJGQQ&autoplay=0&rel=0" },
+      { "label": "SpaceX",           "url": "https://www.youtube.com/@SpaceX/live",        "embed": "https://www.youtube.com/embed/live_stream?channel=UCtI0Hodo5o5dUb67FeUjDeA&autoplay=0&rel=0" },
+      { "label": "The Verge",        "url": "https://www.youtube.com/@TheVerge/live",      "embed": "https://www.youtube.com/embed/live_stream?channel=UCddiUEpeqJcYeBxX1IVBKvQ&autoplay=0&rel=0" },
+      { "label": "Linus Tech Tips",  "url": "https://www.youtube.com/@LinusTechTips/live", "embed": "https://www.youtube.com/embed/live_stream?channel=UCXuqSBlHAE6Xw-yeJA0Tunw&autoplay=0&rel=0" }
+    ]
+  },
+  {
+    "id": "weather",
+    "label": "Weather",
+    "icon": "🌤️",
+    "description": "Live weather channels and forecasts",
+    "panels": [
+      { "label": "The Weather Channel","url": "https://www.youtube.com/@WeatherChannel/live", "embed": "https://www.youtube.com/embed/live_stream?channel=UChF2jBPiNOLMUhz3NZJCQNQ&autoplay=0&rel=0" },
+      { "label": "AccuWeather",        "url": "https://www.youtube.com/@accuweather/live",    "embed": "https://www.youtube.com/embed/live_stream?channel=UCBlpUBr_TMdoZlFOgj0N8zw&autoplay=0&rel=0" },
+      { "label": "Weather Nation",     "url": "https://www.youtube.com/@weathernation/live",  "embed": "https://www.youtube.com/embed/live_stream?channel=UCUf2X6cXMiTBXHH_cPz6diw&autoplay=0&rel=0" }
+    ]
+  }
+]

@@ -35,6 +35,7 @@
       Export</button>
     <button class="btn btn-ghost" onclick="importBoard()" title="Import a previously exported board (.html or .json)">📥
       Import</button>
+    <button class="btn btn-ghost" onclick="openPresets()" title="Browse channel presets by category">☰ Presets</button>
     <button class="btn btn-ghost" id="help-btn" onclick="toggleHelp()">? Compat</button>
     <button class="btn btn-ghost" onclick="clearAll()" style="color:var(--danger);border-color:var(--danger);">✕
       Clear</button>
@@ -197,6 +198,34 @@
         <button class="btn btn-ghost" id="share-modal-close">Close</button>
         <button class="btn btn-accent" id="share-modal-copy">Copy</button>
       </div>
+    </div>
+  </div>
+
+  <!-- PRESETS MODAL -->
+  <div id="presets-modal">
+    <div id="presets-card">
+      <div id="presets-modal-header">
+        <span>☰ Presets</span>
+        <button onclick="closePresets()" title="Close">✕</button>
+      </div>
+      <div id="presets-body">
+        <div id="presets-categories"></div>
+        <div id="presets-detail">
+          <div id="presets-detail-title"></div>
+          <div id="presets-list"></div>
+          <div id="presets-actions">
+            <button class="btn btn-ghost" id="presets-add-btn" onclick="applyPreset(false)">+ Add to board</button>
+            <button class="btn btn-accent" id="presets-load-btn" onclick="applyPreset(true)">⏎ Load preset</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="focus-sidebar">
+    <div id="focus-sidebar-header">
+      <span>Panels</span>
+      <button id="focus-sidebar-close" onclick="exitFocusMode()" title="Exit focus mode">✕</button>
     </div>
   </div>
 

@@ -12,7 +12,8 @@ const LS_LAYOUTS = 'gridio_layouts';
 
 function saveState() {
     try {
-        localStorage.setItem(LS_KEY, JSON.stringify({ panels, nextId, zTop }));
+        const state = { panels: panels.map(p => ({ ...p, focused: false })), nextId, zTop };
+        localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch (e) { /* storage full / private mode */ }
 }
 
@@ -330,17 +331,18 @@ function detectBlocked(url) {
     return BLOCKED.some(b => url.includes(b));
 }
 
-function convertToEmbed(url, muted = false) {
+function convertToEmbed(url, muted = false, autoplay = false) {
     const muteYT = muted ? '&mute=1' : '';
     const muteVimeo = muted ? '&muted=1' : '';
+    const autoVimeo = autoplay ? '&autoplay=1' : '';
 
-    // YouTube
-    const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-    if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=0&rel=0${muteYT}`;
+    // YouTube (watch, shorts, youtu.be, and /live/ID share links)
+    const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|live\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=${autoplay ? 1 : 0}&rel=0${muteYT}`;
 
     // Vimeo
     const vi = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
-    if (vi) return `https://player.vimeo.com/video/${vi[1]}?${muteVimeo}`;
+    if (vi) return `https://player.vimeo.com/video/${vi[1]}?${muteVimeo}${autoVimeo}`;
 
     // Dailymotion
     const dm = url.match(/dailymotion\.com\/video\/([a-zA-Z0-9]+)/);
@@ -548,7 +550,6 @@ function renderPanel(p) {
     makeResizable(el, document.getElementById('rsz-' + p.id), p);
     bringToFront(el, p);
     if (p.pinned) el.classList.add('pinned');
-    if (p.focused) el.classList.add('focused');
     applyTag(p);
 }
 
@@ -682,61 +683,88 @@ function togglePin(id) {
 }
 
 // ── FOCUS ──
-function toggleFocus(id) {
-    const p = panels.find(p => p.id === id);
-    if (!p) return;
+// ── THEATER MODE ──
+function enterFocusMode(id) {
+    const sidebar = document.getElementById('focus-sidebar');
+    panels.forEach(pan => {
+        const el = document.getElementById('vp-' + pan.id);
+        if (!el) return;
+        if (pan.id === id) {
+            pan.focused = true;
+            el.classList.add('theater-main');
+            bringToFront(el, pan);
+        } else {
+            sidebar.appendChild(el);
+            const overlay = document.createElement('div');
+            overlay.className = 'sidebar-click-overlay';
+            overlay.addEventListener('click', () => swapFocusMain(pan.id));
+            el.querySelector('.vp-body').appendChild(overlay);
+        }
+    });
+    sidebar.classList.add('open');
+    saveState();
+}
 
-    const applyTransition = (el, pan) => {
-        el.style.transition = 'left .35s cubic-bezier(.4,0,.2,1), top .35s cubic-bezier(.4,0,.2,1), width .35s, height .35s';
-        setTimeout(() => { if (pan.focused === el.classList.contains('focused')) el.style.transition = ''; }, 400);
-    };
-
-    const unfocus = (pan) => {
+function exitFocusMode() {
+    const sidebar = document.getElementById('focus-sidebar');
+    sidebar.classList.remove('open');
+    panels.forEach(pan => {
         pan.focused = false;
         const el = document.getElementById('vp-' + pan.id);
         if (!el) return;
-        el.classList.remove('focused');
-        applyTransition(el, pan);
+        el.classList.remove('theater-main');
+        el.querySelector('.sidebar-click-overlay')?.remove();
+        canvasInner.appendChild(el);
         el.style.left = pan.x + 'px';
         el.style.top = pan.y + 'px';
         el.style.width = pan.w + 'px';
         el.style.height = pan.h + 'px';
-    };
-
-    if (p.focused) {
-        unfocus(p);
-        saveState();
-        return;
-    }
-
-    panels.forEach(pan => { if (pan.focused) unfocus(pan); });
-
-    p.focused = true;
-    const el = document.getElementById('vp-' + id);
-    el.classList.add('focused');
-    bringToFront(el, p);
-
-    applyTransition(el, p);
-    el.style.left = canvas.scrollLeft + 'px';
-    el.style.top = canvas.scrollTop + 'px';
-    el.style.width = canvas.clientWidth + 'px';
-    el.style.height = canvas.clientHeight + 'px';
-
+    });
     saveState();
 }
 
-window.addEventListener('resize', () => {
-    const focused = panels.find(p => p.focused);
-    if (focused) {
-        const el = document.getElementById('vp-' + focused.id);
-        if (el) {
-            el.style.left = canvas.scrollLeft + 'px';
-            el.style.top = canvas.scrollTop + 'px';
-            el.style.width = canvas.clientWidth + 'px';
-            el.style.height = canvas.clientHeight + 'px';
+function swapFocusMain(newId) {
+    const sidebar = document.getElementById('focus-sidebar');
+    const currentMain = panels.find(p => p.focused);
+    const newMain = panels.find(p => p.id === newId);
+    if (!newMain) return;
+
+    if (currentMain) {
+        currentMain.focused = false;
+        const currentEl = document.getElementById('vp-' + currentMain.id);
+        if (currentEl) {
+            currentEl.classList.remove('theater-main');
+            sidebar.appendChild(currentEl);
+            const overlay = document.createElement('div');
+            overlay.className = 'sidebar-click-overlay';
+            overlay.addEventListener('click', () => swapFocusMain(currentMain.id));
+            currentEl.querySelector('.vp-body').appendChild(overlay);
         }
     }
-});
+
+    newMain.focused = true;
+    const newEl = document.getElementById('vp-' + newId);
+    if (newEl) {
+        newEl.querySelector('.sidebar-click-overlay')?.remove();
+        newEl.classList.add('theater-main');
+        canvasInner.appendChild(newEl);
+        bringToFront(newEl, newMain);
+    }
+    saveState();
+}
+
+function toggleFocus(id) {
+    const p = panels.find(p => p.id === id);
+    if (!p) return;
+    const inFocusMode = panels.some(p => p.focused);
+    if (!inFocusMode) {
+        enterFocusMode(id);
+    } else if (p.focused) {
+        exitFocusMode();
+    } else {
+        swapFocusMain(id);
+    }
+}
 
 // ── Z-INDEX ──
 function bringToFront(el, p) {
@@ -803,12 +831,9 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
         document.getElementById('ctx-menu').classList.remove('open');
         document.getElementById('help-panel').classList.remove('open');
-
-        // Escape un-focuses any currently focused panel
-        const focusedPanel = panels.find(p => p.focused);
-        if (focusedPanel) {
-            toggleFocus(focusedPanel.id);
-        }
+        closePresets();
+        // Escape exits theater mode
+        if (panels.some(p => p.focused)) exitFocusMode();
     }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
@@ -889,6 +914,103 @@ window.addEventListener('message', e => {
         }
         if (height || width) saveState();
     } catch { /* malformed message, ignore */ }
+});
+
+// ── PRESETS ──
+let presetsData = null;
+let activePresetCategory = null;
+
+async function openPresets() {
+    document.getElementById('presets-modal').classList.add('open');
+    if (presetsData) return; // already loaded
+    try {
+        presetsData = await fetch('presets.json').then(r => {
+            if (!r.ok) throw new Error(r.status);
+            return r.json();
+        });
+        renderPresetCategories();
+        if (presetsData.length > 0) selectPresetCategory(presetsData[0]);
+    } catch (e) {
+        document.getElementById('presets-categories').innerHTML =
+            `<div class="presets-error">Could not load presets.json.<br>Make sure you are running on a local server (e.g. <code>npx serve .</code>).</div>`;
+        document.getElementById('presets-detail').classList.add('empty');
+    }
+}
+
+function closePresets() {
+    document.getElementById('presets-modal').classList.remove('open');
+}
+
+function renderPresetCategories() {
+    const container = document.getElementById('presets-categories');
+    container.innerHTML = presetsData.map(cat => `
+        <button class="preset-cat-btn" id="pcat-${cat.id}" onclick="selectPresetCategory(presetsData.find(c=>c.id==='${cat.id}'))">
+            <span class="cat-icon">${cat.icon}</span>
+            <span>${cat.label}</span>
+            <span class="cat-count">${cat.panels.length}</span>
+        </button>`).join('');
+}
+
+function selectPresetCategory(cat) {
+    if (!cat) return;
+    activePresetCategory = cat;
+    // Highlight active
+    document.querySelectorAll('.preset-cat-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('pcat-' + cat.id)?.classList.add('active');
+    // Render detail
+    document.getElementById('presets-detail-title').textContent = `${cat.icon}  ${cat.label} — ${cat.description}`;
+    document.getElementById('presets-list').innerHTML = cat.panels.map(p =>
+        `<div class="preset-panel-row"><span class="preset-dot"></span>${escHtml(p.label)}</div>`
+    ).join('');
+    document.getElementById('presets-detail').classList.remove('empty');
+}
+
+function applyPreset(replace) {
+    if (!activePresetCategory) return;
+    const doLoad = () => {
+        if (replace) {
+            panels.forEach(p => document.getElementById('vp-' + p.id)?.remove());
+            panels = [];
+        }
+        activePresetCategory.panels.forEach(item => {
+            const blocked = detectBlocked(item.url);
+            let embedUrl = null;
+            if (!blocked) {
+                if (item.embed) {
+                    // Patch the preset's embed URL: autoplay on, muted
+                    embedUrl = item.embed
+                        .replace(/autoplay=0/, 'autoplay=1')
+                        + (item.embed.includes('mute=') || item.embed.includes('muted=') ? '' : '&mute=1');
+                } else {
+                    embedUrl = convertToEmbed(item.url, true, true);
+                }
+            }
+            const id = nextId++;
+            const isTikTok = /tiktok\.com/.test(item.url);
+            const w = isTikTok ? 325 : 480, h = isTikTok ? 580 : 310;
+            const { x, y } = findFreePosition(w, h);
+            const panel = { id, label: item.label, raw: item.url, embedUrl, blocked, x, y, w, h, z: ++zTop, pinned: false, muted: true, tag: null, focused: false };
+            panels.push(panel);
+            renderPanel(panel);
+        });
+        updateCount();
+        saveState();
+        empty.style.display = 'none';
+        closePresets();
+        tileAll();
+        showToast(`${activePresetCategory.icon} ${activePresetCategory.label} loaded`);
+    };
+
+    if (replace && panels.length > 0) {
+        showConfirmModal(`Replace the current board with "${activePresetCategory.label}"?`, doLoad);
+    } else {
+        doLoad();
+    }
+}
+
+// Close presets modal on backdrop click or Escape
+document.getElementById('presets-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('presets-modal')) closePresets();
 });
 
 // ── BOOT ──
