@@ -534,3 +534,212 @@ body {
 #help-panel .section {
   margin-top: 20px;
 }
+
+/* ── LAYOUTS BAR ── */
+#layouts-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+#layouts-select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  padding: 5px 8px;
+  outline: none;
+  cursor: pointer;
+  max-width: 120px;
+}
+
+#layouts-select:focus {
+  border-color: var(--accent2);
+}
+
+/* ── COLOUR TAG ── */
+.vp-btn.tag {
+  font-size: 15px;
+  line-height: 1;
+  padding: 0;
+}
+
+/* ── CONTEXT MENU ── */
+#ctx-menu {
+  display: none;
+  position: fixed;
+  z-index: 3000;
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .7);
+  min-width: 168px;
+  overflow: hidden;
+}
+
+#ctx-menu.open {
+  display: block;
+}
+
+.ctx-item {
+  padding: 9px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text);
+  transition: background .1s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ctx-item:hover {
+  background: var(--surface2);
+}
+
+.ctx-item.danger {
+  color: var(--danger);
+}
+
+/* ── KBD HINTS ── */
+kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  border: 1px solid var(--border-bright);
+  border-radius: 3px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  background: var(--surface2);
+  color: var(--text-dim);
+}
+
+/* ── LAYOUT MODAL ── */
+#layout-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .6);
+  z-index: 4000;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(3px);
+}
+
+#layout-modal.open {
+  display: flex;
+}
+
+#layout-modal-card {
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: 10px;
+  padding: 24px;
+  width: 320px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .8);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+#layout-modal-title {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+#layout-name-input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: 'Syne', sans-serif;
+  font-size: 13px;
+  padding: 8px 12px;
+  outline: none;
+  width: 100%;
+  transition: border-color .2s;
+}
+
+#layout-name-input:focus {
+  border-color: var(--accent2);
+}
+
+#layout-name-input::placeholder {
+  color: var(--text-dim);
+}
+
+#layout-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* ── CONFIRM MODAL ── */
+#confirm-modal,
+#share-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, .6);
+  z-index: 4000;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(3px);
+}
+
+#confirm-modal.open,
+#share-modal.open {
+  display: flex;
+}
+
+#confirm-modal-card,
+#share-modal-card {
+  background: var(--surface);
+  border: 1px solid var(--border-bright);
+  border-radius: 10px;
+  padding: 24px;
+  width: 320px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .8);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+#confirm-modal-msg {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+#confirm-modal-actions,
+#share-modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* ── SHARE MODAL ── */
+#share-modal-title {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+#share-modal-input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  padding: 8px 12px;
+  outline: none;
+  width: 100%;
+  cursor: text;
+  user-select: all;
+}

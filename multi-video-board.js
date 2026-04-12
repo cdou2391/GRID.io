@@ -8,6 +8,7 @@ const panelCount = document.getElementById('panel-count');
 
 // ── LOCAL STORAGE ──
 const LS_KEY = 'gridio_board';
+const LS_LAYOUTS = 'gridio_layouts';
 
 function saveState() {
     try {
@@ -23,14 +24,226 @@ function loadState() {
         if (!Array.isArray(saved) || saved.length === 0) return false;
         nextId = sid ?? nextId;
         zTop = sz ?? zTop;
-        saved.forEach(p => {
-            panels.push(p);
-            renderPanel(p);
-        });
+        saved.forEach(p => { panels.push(p); renderPanel(p); });
         updateCount();
         empty.style.display = 'none';
         return true;
     } catch (e) { return false; }
+}
+
+// ── NAMED LAYOUTS ──
+function getLayouts() {
+    try { return JSON.parse(localStorage.getItem(LS_LAYOUTS)) || {}; } catch { return {}; }
+}
+
+function saveLayout() {
+    showLayoutModal(name => {
+        const layouts = getLayouts();
+        layouts[name] = { panels: panels.map(p => ({ ...p })), nextId, zTop };
+        localStorage.setItem(LS_LAYOUTS, JSON.stringify(layouts));
+        refreshLayoutsSelect(name);
+        showToast(`💾 Layout "${name}" saved`);
+    });
+}
+
+function showLayoutModal(onConfirm) {
+    const modal = document.getElementById('layout-modal');
+    const input = document.getElementById('layout-name-input');
+    const saveBtn = document.getElementById('layout-modal-save');
+    const cancelBtn = document.getElementById('layout-modal-cancel');
+
+    input.value = '';
+    modal.classList.add('open');
+    setTimeout(() => input.focus(), 50);
+
+    function confirm() {
+        const name = input.value.trim();
+        if (!name) { input.focus(); return; }
+        close();
+        onConfirm(name);
+    }
+    function close() {
+        modal.classList.remove('open');
+        saveBtn.removeEventListener('click', confirm);
+        cancelBtn.removeEventListener('click', close);
+        modal.removeEventListener('click', onBackdrop);
+        input.removeEventListener('keydown', onKey);
+    }
+    function onBackdrop(e) { if (e.target === modal) close(); }
+    function onKey(e) {
+        if (e.key === 'Enter') { e.preventDefault(); confirm(); }
+        if (e.key === 'Escape') { e.preventDefault(); close(); }
+    }
+
+    saveBtn.addEventListener('click', confirm);
+    cancelBtn.addEventListener('click', close);
+    modal.addEventListener('click', onBackdrop);
+    input.addEventListener('keydown', onKey);
+}
+
+function loadLayout(name) {
+    if (!name) return;
+    const layouts = getLayouts();
+    const snap = layouts[name];
+    if (!snap) return;
+    // Clear without triggering saveState mid-restore
+    panels.forEach(p => document.getElementById('vp-' + p.id)?.remove());
+    panels = [];
+    nextId = snap.nextId ?? 1;
+    zTop = snap.zTop ?? 10;
+    snap.panels.forEach(p => { panels.push({ ...p }); renderPanel(p); });
+    updateCount();
+    empty.style.display = panels.length === 0 ? '' : 'none';
+    saveState();
+    showToast(`📂 Layout "${name}" loaded`);
+}
+
+function deleteLayout() {
+    const sel = document.getElementById('layouts-select');
+    const name = sel.value;
+    if (!name) { showToast('Select a layout first', true); return; }
+    showConfirmModal(`Delete layout “${name}”?`, () => {
+        const layouts = getLayouts();
+        delete layouts[name];
+        localStorage.setItem(LS_LAYOUTS, JSON.stringify(layouts));
+        refreshLayoutsSelect('');
+        showToast(`🗑 Layout “${name}” deleted`);
+    });
+}
+
+function showConfirmModal(message, onConfirm) {
+    const modal = document.getElementById('confirm-modal');
+    const msg = document.getElementById('confirm-modal-msg');
+    const okBtn = document.getElementById('confirm-modal-ok');
+    const cancelBtn = document.getElementById('confirm-modal-cancel');
+
+    msg.textContent = message;
+    modal.classList.add('open');
+    okBtn.focus();
+
+    function close() {
+        modal.classList.remove('open');
+        okBtn.removeEventListener('click', ok);
+        cancelBtn.removeEventListener('click', close);
+        modal.removeEventListener('click', onBackdrop);
+        document.removeEventListener('keydown', onKey);
+    }
+    function ok() { close(); onConfirm(); }
+    function onBackdrop(e) { if (e.target === modal) close(); }
+    function onKey(e) {
+        if (e.key === 'Enter') { e.preventDefault(); ok(); }
+        if (e.key === 'Escape') { e.preventDefault(); close(); }
+    }
+
+    okBtn.addEventListener('click', ok);
+    cancelBtn.addEventListener('click', close);
+    modal.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey);
+}
+
+function showShareModal(url) {
+    const modal = document.getElementById('share-modal');
+    const input = document.getElementById('share-modal-input');
+    const copyBtn = document.getElementById('share-modal-copy');
+    const closeBtn = document.getElementById('share-modal-close');
+
+    input.value = url;
+    modal.classList.add('open');
+    setTimeout(() => { input.focus(); input.select(); }, 50);
+
+    function close() {
+        modal.classList.remove('open');
+        copyBtn.removeEventListener('click', doCopy);
+        closeBtn.removeEventListener('click', close);
+        modal.removeEventListener('click', onBackdrop);
+        document.removeEventListener('keydown', onKey);
+    }
+    function doCopy() {
+        navigator.clipboard.writeText(url).then(() => {
+            copyBtn.textContent = 'Copied!';
+            setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+        });
+    }
+    function onBackdrop(e) { if (e.target === modal) close(); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+
+    copyBtn.addEventListener('click', doCopy);
+    closeBtn.addEventListener('click', close);
+    modal.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey);
+}
+
+function refreshLayoutsSelect(activeVal = '') {
+    const sel = document.getElementById('layouts-select');
+    const layouts = getLayouts();
+    sel.innerHTML = '<option value="">— Layouts —</option>';
+    Object.keys(layouts).sort().forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        if (name === activeVal) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
+// ── SHAREABLE URL ──
+function shareBoard() {
+    if (panels.length === 0) { showToast('No panels to share', true); return; }
+    try {
+        const data = btoa(unescape(encodeURIComponent(JSON.stringify(panels))));
+        const url = `${location.origin}${location.pathname}?board=${data}`;
+        navigator.clipboard.writeText(url).then(() => {
+            showToast('🔗 Link copied to clipboard!');
+        }).catch(() => {
+            showShareModal(url);
+        });
+    } catch (e) {
+        showToast('Failed to generate share link', true);
+    }
+}
+
+function loadFromUrl() {
+    try {
+        const param = new URLSearchParams(location.search).get('board');
+        if (!param) return false;
+        const saved = JSON.parse(decodeURIComponent(escape(atob(param))));
+        if (!Array.isArray(saved) || saved.length === 0) return false;
+        saved.forEach(p => { panels.push(p); renderPanel(p); });
+        updateCount();
+        empty.style.display = 'none';
+        showToast('🔗 Board restored from shared link');
+        return true;
+    } catch (e) { return false; }
+}
+
+// ── COLOUR TAGS ──
+const TAG_COLORS = [null, '#e84040', '#e8a020', '#30d080', '#20b8e8', '#9b6bff', '#ff69b4'];
+
+function cycleTag(id) {
+    const p = panels.find(p => p.id === id);
+    if (!p) return;
+    const idx = TAG_COLORS.indexOf(p.tag ?? null);
+    p.tag = TAG_COLORS[(idx + 1) % TAG_COLORS.length];
+    applyTag(p);
+    saveState();
+}
+
+function applyTag(p) {
+    const el = document.getElementById('vp-' + p.id);
+    if (!el) return;
+    const dot = el.querySelector('.vp-dot');
+    const tagBtn = el.querySelector('.vp-btn.tag');
+    if (p.tag) {
+        el.style.borderTopColor = p.tag;
+        el.style.borderTopWidth = '3px';
+        if (dot) dot.style.background = p.tag;
+        if (tagBtn) tagBtn.style.color = p.tag;
+    } else {
+        el.style.borderTopColor = '';
+        el.style.borderTopWidth = '';
+        if (dot) dot.style.background = '';
+        if (tagBtn) tagBtn.style.color = 'var(--text-dim)';
+    }
 }
 
 // ── URL CONVERSION ──
@@ -69,7 +282,7 @@ function convertToEmbed(url, muted = false) {
         return url.replace('open.spotify.com/', 'open.spotify.com/embed/');
     }
 
-    return url; // use as-is
+    return url;
 }
 
 function supportsEmbedMute(url) {
@@ -91,7 +304,6 @@ function resolveCollisions(moved) {
             if (other.id === moved.id) continue;
             const ov = getOverlap(moved, other);
             if (!ov) continue;
-            // Push in the axis of least overlap
             if (ov.w <= ov.h) {
                 const push = ov.w + 8;
                 moved.x += (moved.x < other.x) ? -push : push;
@@ -109,7 +321,7 @@ function resolveCollisions(moved) {
 }
 
 function findFreePosition(w, h) {
-    const gap = 16, pad = 20, step = 20;
+    const pad = 20, step = 20;
     for (let y = pad; y < 2400; y += step) {
         for (let x = pad; x < 3600; x += step) {
             const c = { x, y, w, h };
@@ -166,7 +378,7 @@ function addPanel() {
     const id = nextId++;
     const w = 480, h = 310;
     const { x, y } = findFreePosition(w, h);
-    const panel = { id, label, raw, embedUrl, blocked, x, y, w, h, z: ++zTop, pinned: false, muted: false };
+    const panel = { id, label, raw, embedUrl, blocked, x, y, w, h, z: ++zTop, pinned: false, muted: false, tag: null };
 
     panels.push(panel);
     renderPanel(panel);
@@ -176,8 +388,6 @@ function addPanel() {
     urlInput.value = '';
     titleInput.value = '';
     empty.style.display = 'none';
-
-    // Scroll to new panel
     canvas.scrollTo({ left: panel.x - 60, top: panel.y - 60, behavior: 'smooth' });
 }
 
@@ -225,17 +435,19 @@ function renderPanel(p) {
   </div>`
         : `<iframe src="${p.embedUrl}" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
 
+    const tagStyle = p.tag ? `color:${p.tag}` : 'color:var(--text-dim)';
+    const tagBtn = p.blocked ? '' : `<button class="vp-btn tag" id="tag-${p.id}" title="Colour tag" onclick="cycleTag(${p.id})" style="${tagStyle}">●</button>`;
     const muteIcon = p.muted ? '🔇' : '🔊';
-    const muteTitle = p.muted ? 'Unmute' : 'Mute';
-    const muteBtn = p.blocked ? '' : `<button class="vp-btn mute${p.muted ? ' active' : ''}" id="mute-${p.id}" title="${muteTitle}" onclick="toggleMute(${p.id})">${muteIcon}</button>`;
+    const muteBtn = p.blocked ? '' : `<button class="vp-btn mute${p.muted ? ' active' : ''}" id="mute-${p.id}" title="${p.muted ? 'Unmute' : 'Mute'}" onclick="toggleMute(${p.id})">${muteIcon}</button>`;
 
     el.innerHTML = `
 <div class="vp-header" id="hdr-${p.id}">
   <div class="vp-dot"></div>
   <div class="vp-title">${escHtml(p.label)}</div>
   <div class="vp-actions">
+    ${tagBtn}
     ${muteBtn}
-    <button class="vp-btn pin${p.pinned ? ' active' : ''}" id="pin-${p.id}" title="${p.pinned ? 'Unlock position &amp; size' : 'Lock position &amp; size'}" onclick="togglePin(${p.id})">📌</button>
+    <button class="vp-btn pin${p.pinned ? ' active' : ''}" id="pin-${p.id}" title="${p.pinned ? 'Unlock' : 'Lock'} position &amp; size" onclick="togglePin(${p.id})">📌</button>
     <button class="vp-btn" title="Open in new tab" onclick="window.open('${escHtml(p.raw)}','_blank')">↗</button>
     <button class="vp-btn close" title="Remove" onclick="removePanel(${p.id})">✕</button>
   </div>
@@ -251,11 +463,8 @@ function renderPanel(p) {
     makeDraggable(el, document.getElementById('hdr-' + p.id), p);
     makeResizable(el, document.getElementById('rsz-' + p.id), p);
     bringToFront(el, p);
-
-    // Apply pinned state if restored from storage
-    if (p.pinned) {
-        el.classList.add('pinned');
-    }
+    if (p.pinned) el.classList.add('pinned');
+    applyTag(p);
 }
 
 function escHtml(s) {
@@ -266,92 +475,111 @@ function escHtml(s) {
 function toggleMute(id) {
     const p = panels.find(p => p.id === id);
     if (!p || p.blocked) return;
-
     if (!supportsEmbedMute(p.raw)) {
         showToast('Mute not supported for this service', true);
         return;
     }
-
     p.muted = !p.muted;
     p.embedUrl = convertToEmbed(p.raw, p.muted);
-
-    // Reload the iframe with new src
     const body = document.querySelector(`#vp-${id} .vp-body`);
     if (body) {
         body.innerHTML = `<iframe src="${p.embedUrl}" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
     }
-
     const btn = document.getElementById('mute-' + id);
     if (btn) {
         btn.textContent = p.muted ? '🔇' : '🔊';
         btn.title = p.muted ? 'Unmute' : 'Mute';
         btn.classList.toggle('active', p.muted);
     }
-
     saveState();
     showToast(p.muted ? '🔇 Muted' : '🔊 Unmuted');
 }
 
-// ── DRAG ──
+// ── TOUCH HELPER ──
+function clientXY(e) {
+    if (e.touches && e.touches.length > 0) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    if (e.changedTouches && e.changedTouches.length > 0) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+    return { x: e.clientX, y: e.clientY };
+}
+
+// ── DRAG (mouse + touch) ──
 function makeDraggable(el, handle, p) {
     let ox, oy, startX, startY, dragging = false;
 
-    handle.addEventListener('mousedown', e => {
+    function onStart(e) {
         if (e.target.closest('.vp-actions')) return;
-        if (p.pinned) return;  // locked
+        if (p.pinned) return;
+        if (e.type === 'mousedown' && e.button !== 0) return;
         e.preventDefault();
         bringToFront(el, p);
         dragging = true;
-        startX = e.clientX; startY = e.clientY;
+        const { x, y } = clientXY(e);
+        startX = x; startY = y;
         ox = p.x; oy = p.y;
         el.classList.add('dragging');
 
-        const move = e => {
+        const onMove = e => {
             if (!dragging) return;
-            p.x = Math.max(0, ox + (e.clientX - startX));
-            p.y = Math.max(0, oy + (e.clientY - startY));
+            const { x, y } = clientXY(e);
+            p.x = Math.max(0, ox + (x - startX));
+            p.y = Math.max(0, oy + (y - startY));
             el.style.left = p.x + 'px';
             el.style.top = p.y + 'px';
         };
-        const up = () => {
+        const onEnd = () => {
             dragging = false;
             el.classList.remove('dragging');
             resolveCollisions(p);
             saveState();
-            document.removeEventListener('mousemove', move);
-            document.removeEventListener('mouseup', up);
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onEnd);
+            document.removeEventListener('touchmove', onMove);
+            document.removeEventListener('touchend', onEnd);
         };
-        document.addEventListener('mousemove', move);
-        document.addEventListener('mouseup', up);
-    });
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onEnd);
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('touchend', onEnd);
+    }
+
+    handle.addEventListener('mousedown', onStart);
+    handle.addEventListener('touchstart', onStart, { passive: false });
 }
 
-// ── RESIZE ──
+// ── RESIZE (mouse + touch) ──
 function makeResizable(el, handle, p) {
-    handle.addEventListener('mousedown', e => {
+    function onStart(e) {
         e.preventDefault();
         e.stopPropagation();
-        if (p.pinned) return;  // locked
-        const startX = e.clientX, startY = e.clientY;
+        if (p.pinned) return;
+        const { x: startX, y: startY } = clientXY(e);
         const startW = p.w, startH = p.h;
         el.classList.add('resizing');
 
-        const move = e => {
-            p.w = Math.max(200, startW + (e.clientX - startX));
-            p.h = Math.max(160, startH + (e.clientY - startY));
+        const onMove = e => {
+            const { x, y } = clientXY(e);
+            p.w = Math.max(200, startW + (x - startX));
+            p.h = Math.max(160, startH + (y - startY));
             el.style.width = p.w + 'px';
             el.style.height = p.h + 'px';
         };
-        const up = () => {
+        const onEnd = () => {
             el.classList.remove('resizing');
             resolveCollisions(p);
             saveState();
-            document.removeEventListener('mousemove', move);
-            document.removeEventListener('mouseup', up);
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onEnd);
+            document.removeEventListener('touchmove', onMove);
+            document.removeEventListener('touchend', onEnd);
         };
-        document.addEventListener('mousemove', move);
-        document.addEventListener('mouseup', up);
-    });
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onEnd);
+        document.addEventListener('touchmove', onMove, { passive: false });
+        document.addEventListener('touchend', onEnd);
+    }
+
+    handle.addEventListener('mousedown', onStart);
+    handle.addEventListener('touchstart', onStart, { passive: false });
 }
 
 // ── PIN / LOCK ──
@@ -363,7 +591,7 @@ function togglePin(id) {
     const btn = document.getElementById('pin-' + id);
     el.classList.toggle('pinned', p.pinned);
     btn.classList.toggle('active', p.pinned);
-    btn.title = p.pinned ? 'Unlock position & size' : 'Lock position & size';
+    btn.title = (p.pinned ? 'Unlock' : 'Lock') + ' position & size';
     saveState();
     showToast(p.pinned ? '📌 Panel locked' : '🔓 Panel unlocked');
 }
@@ -374,12 +602,66 @@ function bringToFront(el, p) {
     el.style.zIndex = p.z;
 }
 
+// ── RIGHT-CLICK CONTEXT MENU ──
+let ctxTargetId = null;
+
+canvasInner.addEventListener('contextmenu', e => {
+    const vp = e.target.closest('.vp');
+    if (!vp) return;
+    e.preventDefault();
+    ctxTargetId = parseInt(vp.id.replace('vp-', ''));
+    const menu = document.getElementById('ctx-menu');
+    // Keep menu inside viewport
+    const menuW = 168, menuH = 120;
+    const left = Math.min(e.clientX, window.innerWidth - menuW - 8);
+    const top = Math.min(e.clientY, window.innerHeight - menuH - 8);
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+    menu.classList.add('open');
+});
+
+document.addEventListener('click', e => {
+    if (!e.target.closest('#ctx-menu')) {
+        document.getElementById('ctx-menu').classList.remove('open');
+    }
+});
+
+function ctxAction(action) {
+    document.getElementById('ctx-menu').classList.remove('open');
+    const p = panels.find(p => p.id === ctxTargetId);
+    if (!p) return;
+
+    if (action === 'duplicate') {
+        const np = { ...p, id: nextId++, x: p.x + 24, y: p.y + 24, z: ++zTop, pinned: false };
+        panels.push(np);
+        renderPanel(np);
+        updateCount();
+        saveState();
+        showToast('⧉ Panel duplicated');
+    } else if (action === 'reload') {
+        const body = document.querySelector(`#vp-${p.id} .vp-body`);
+        if (body) {
+            const iframe = body.querySelector('iframe');
+            if (iframe) { const src = iframe.src; iframe.src = ''; iframe.src = src; }
+        }
+        showToast('↺ Panel reloaded');
+    } else if (action === 'front') {
+        const el = document.getElementById('vp-' + p.id);
+        if (el) bringToFront(el, p);
+        saveState();
+        showToast('⬆ Brought to front');
+    }
+}
+
 // ── KEYBOARD SHORTCUTS ──
 document.addEventListener('keydown', e => {
-    // Ctrl+Enter or / — focus URL input (unless already in an input)
     const tag = document.activeElement.tagName;
     const inInput = tag === 'INPUT' || tag === 'TEXTAREA';
 
+    if (e.key === 'Escape') {
+        document.getElementById('ctx-menu').classList.remove('open');
+        document.getElementById('help-panel').classList.remove('open');
+    }
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         document.getElementById('url-input').focus();
@@ -399,29 +681,23 @@ document.getElementById('title-input').addEventListener('keydown', e => { if (e.
     let panning = false, startX, startY, scrollLeft, scrollTop;
 
     canvas.addEventListener('mousedown', e => {
-        if (e.button !== 1) return; // middle button only
+        if (e.button !== 1) return;
         e.preventDefault();
         panning = true;
-        startX = e.clientX;
-        startY = e.clientY;
-        scrollLeft = canvas.scrollLeft;
-        scrollTop = canvas.scrollTop;
+        startX = e.clientX; startY = e.clientY;
+        scrollLeft = canvas.scrollLeft; scrollTop = canvas.scrollTop;
         canvas.style.cursor = 'grabbing';
     });
-
     document.addEventListener('mousemove', e => {
         if (!panning) return;
         canvas.scrollLeft = scrollLeft - (e.clientX - startX);
         canvas.scrollTop = scrollTop - (e.clientY - startY);
     });
-
     document.addEventListener('mouseup', e => {
         if (e.button !== 1) return;
         panning = false;
         canvas.style.cursor = '';
     });
-
-    // Prevent the browser's "auto-scroll" mode on middle-click
     canvas.addEventListener('auxclick', e => { if (e.button === 1) e.preventDefault(); });
 })();
 
@@ -440,17 +716,21 @@ function toggleHelp() {
     document.getElementById('help-panel').classList.toggle('open');
 }
 
-// ── BOOT: restore or seed demo ──
+// ── BOOT ──
 (function boot() {
-    const restored = loadState();
-    if (!restored) {
-        const params = new URLSearchParams(location.search);
-        if (params.get('demo') !== '0') {
-            document.getElementById('url-input').value = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
-            document.getElementById('title-input').value = 'Demo';
-            addPanel();
-            document.getElementById('url-input').value = '';
-            document.getElementById('title-input').value = '';
+    refreshLayoutsSelect();
+
+    // Priority: URL param → localStorage → demo
+    if (!loadFromUrl()) {
+        if (!loadState()) {
+            const params = new URLSearchParams(location.search);
+            if (params.get('demo') !== '0') {
+                document.getElementById('url-input').value = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+                document.getElementById('title-input').value = 'Demo';
+                addPanel();
+                document.getElementById('url-input').value = '';
+                document.getElementById('title-input').value = '';
+            }
         }
     }
 })();

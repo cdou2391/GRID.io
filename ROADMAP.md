@@ -15,11 +15,11 @@ Enhancement ideas tracked for future implementation.
 
 ## 🛠️ Medium effort
 
-- [ ] **Named layouts / snapshots** — save and restore named board arrangements (stored in `localStorage`)
-- [ ] **Shareable URL** — encode panel URLs + positions into the query string for easy board sharing
-- [ ] **Panel groups / colour tags** — group and colour-code panels (e.g. "Sports", "Music")
-- [ ] **Right-click context menu** — per-panel actions: duplicate, reload iframe, bring to front
-- [ ] **Touch / trackpad support** — `touchstart`/`touchmove` equivalents for mobile and iPad
+- [x] **Named layouts / snapshots** — save and restore named board arrangements (stored in `localStorage`)
+- [x] **Shareable URL** — encode panel URLs + positions into the query string for easy board sharing
+- [x] **Panel groups / colour tags** — colour-code panels by cycling through 6 preset colors via a ● button
+- [x] **Right-click context menu** — per-panel actions: duplicate, reload iframe, bring to front
+- [x] **Touch / trackpad support** — `touchstart`/`touchmove`/`touchend` for drag and resize
 
 ---
 

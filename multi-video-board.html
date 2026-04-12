@@ -22,6 +22,15 @@
     </div>
 
     <button class="btn btn-ghost" onclick="tileAll()" title="Arrange all panels in a grid">⊞ Tile</button>
+
+    <!-- Layouts -->
+    <div id="layouts-bar">
+      <select id="layouts-select" onchange="loadLayout(this.value)" title="Restore a saved layout"></select>
+      <button class="btn btn-ghost" onclick="saveLayout()" title="Save current board as a named layout">💾</button>
+      <button class="btn btn-ghost" onclick="deleteLayout()" title="Delete selected layout">🗑</button>
+    </div>
+
+    <button class="btn btn-ghost" onclick="shareBoard()" title="Copy shareable link to clipboard">🔗 Share</button>
     <button class="btn btn-ghost" id="help-btn" onclick="toggleHelp()">? Compat</button>
     <button class="btn btn-ghost" onclick="clearAll()" style="color:var(--danger);border-color:var(--danger);">✕
       Clear</button>
@@ -115,6 +124,9 @@
       <div class="note" style="margin-top:8px;">
         • Drag panels by their header<br>
         • Resize from the ↘ corner handle<br>
+        • Middle-click drag to pan the canvas<br>
+        • Right-click a panel for more options<br>
+        • Press <kbd>/</kbd> or <kbd>Ctrl+Enter</kbd> to focus URL input<br>
         • YouTube &amp; Vimeo URLs are auto-converted<br>
         • Self-hosted services (Plex, Jellyfin, Emby) work great<br>
         • Any site without X-Frame-Options can be embedded
@@ -134,6 +146,48 @@
 
   <!-- TOAST -->
   <div id="toast"></div>
+
+  <!-- CONTEXT MENU -->
+  <div id="ctx-menu">
+    <div class="ctx-item" onclick="ctxAction('duplicate')">⧉ Duplicate</div>
+    <div class="ctx-item" onclick="ctxAction('reload')">↺ Reload</div>
+    <div class="ctx-item" onclick="ctxAction('front')">⬆ Bring to Front</div>
+  </div>
+
+  <!-- LAYOUT NAME MODAL -->
+  <div id="layout-modal">
+    <div id="layout-modal-card">
+      <div id="layout-modal-title">Save Layout</div>
+      <input id="layout-name-input" type="text" placeholder="e.g. Race Day, Study Mode…" autocomplete="off" />
+      <div id="layout-modal-actions">
+        <button class="btn btn-ghost" id="layout-modal-cancel">Cancel</button>
+        <button class="btn btn-accent" id="layout-modal-save">💾 Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIRM MODAL -->
+  <div id="confirm-modal">
+    <div id="confirm-modal-card">
+      <div id="confirm-modal-msg"></div>
+      <div id="confirm-modal-actions">
+        <button class="btn btn-ghost" id="confirm-modal-cancel">Cancel</button>
+        <button class="btn" id="confirm-modal-ok" style="background:var(--danger);color:#fff;">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SHARE LINK MODAL -->
+  <div id="share-modal">
+    <div id="share-modal-card">
+      <div id="share-modal-title">🔗 Shareable Link</div>
+      <input id="share-modal-input" type="text" readonly />
+      <div id="share-modal-actions">
+        <button class="btn btn-ghost" id="share-modal-close">Close</button>
+        <button class="btn btn-accent" id="share-modal-copy">Copy</button>
+      </div>
+    </div>
+  </div>
 
   <script src="multi-video-board.js"></script>
 </body>
