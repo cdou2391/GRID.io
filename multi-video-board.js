@@ -672,27 +672,57 @@ function toggleFocus(id) {
     const p = panels.find(p => p.id === id);
     if (!p) return;
 
-    // If clicking the currently focused panel, unfocus it
+    const applyTransition = (el, pan) => {
+        el.style.transition = 'left .35s cubic-bezier(.4,0,.2,1), top .35s cubic-bezier(.4,0,.2,1), width .35s, height .35s';
+        setTimeout(() => { if (pan.focused === el.classList.contains('focused')) el.style.transition = ''; }, 400);
+    };
+
+    const unfocus = (pan) => {
+        pan.focused = false;
+        const el = document.getElementById('vp-' + pan.id);
+        if (!el) return;
+        el.classList.remove('focused');
+        applyTransition(el, pan);
+        el.style.left = pan.x + 'px';
+        el.style.top = pan.y + 'px';
+        el.style.width = pan.w + 'px';
+        el.style.height = pan.h + 'px';
+    };
+
     if (p.focused) {
-        p.focused = false;
-        document.getElementById('vp-' + id).classList.remove('focused');
+        unfocus(p);
         saveState();
         return;
     }
 
-    // Otherwise focus this one, un-focus all others
-    panels.forEach(pan => {
-        if (pan.focused) {
-            pan.focused = false;
-            document.getElementById('vp-' + pan.id)?.classList.remove('focused');
-        }
-    });
+    panels.forEach(pan => { if (pan.focused) unfocus(pan); });
 
     p.focused = true;
-    document.getElementById('vp-' + id).classList.add('focused');
-    bringToFront(document.getElementById('vp-' + id), p); // bring focused above all
+    const el = document.getElementById('vp-' + id);
+    el.classList.add('focused');
+    bringToFront(el, p);
+
+    applyTransition(el, p);
+    el.style.left = canvas.scrollLeft + 'px';
+    el.style.top = canvas.scrollTop + 'px';
+    el.style.width = canvas.clientWidth + 'px';
+    el.style.height = canvas.clientHeight + 'px';
+
     saveState();
 }
+
+window.addEventListener('resize', () => {
+    const focused = panels.find(p => p.focused);
+    if (focused) {
+        const el = document.getElementById('vp-' + focused.id);
+        if (el) {
+            el.style.left = canvas.scrollLeft + 'px';
+            el.style.top = canvas.scrollTop + 'px';
+            el.style.width = canvas.clientWidth + 'px';
+            el.style.height = canvas.clientHeight + 'px';
+        }
+    }
+});
 
 // ── Z-INDEX ──
 function bringToFront(el, p) {
