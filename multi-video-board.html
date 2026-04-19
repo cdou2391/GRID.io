@@ -21,24 +21,55 @@
       <button class="btn btn-accent" onclick="addPanel()">+ Add</button>
     </div>
 
-    <button class="btn btn-ghost" onclick="tileAll()" title="Arrange all panels in a grid">⊞ Tile</button>
+    <button class="btn btn-ghost" onclick="openPresets()" title="Browse channel presets by category">☰ Presets</button>
 
-    <!-- Layouts -->
-    <div id="layouts-bar">
-      <select id="layouts-select" onchange="loadLayout(this.value)" title="Restore a saved layout"></select>
-      <button class="btn btn-ghost" onclick="saveLayout()" title="Save current board as a named layout">💾</button>
-      <button class="btn btn-ghost" onclick="deleteLayout()" title="Delete selected layout">🗑</button>
+    <!-- Layout group: tile + saved layouts -->
+    <div class="tb-group">
+      <button class="btn btn-ghost tb-trigger">⊞ Layout ▾</button>
+      <div class="tb-dropdown">
+        <button class="tb-item" onclick="tileAll()">⊞ Tile all</button>
+        <div class="tb-sep"></div>
+        <div class="tb-select-row">
+          <select id="layouts-select" onchange="loadLayout(this.value)" title="Restore a saved layout"></select>
+        </div>
+        <button class="tb-item" onclick="saveLayout()">💾 Save layout</button>
+        <button class="tb-item" onclick="deleteLayout()">🗑 Delete layout</button>
+      </div>
     </div>
 
-    <button class="btn btn-ghost" onclick="shareBoard()" title="Copy shareable link to clipboard">🔗 Share</button>
-    <button class="btn btn-ghost" onclick="exportHTML()" title="Download a self-contained HTML snapshot">📤
-      Export</button>
-    <button class="btn btn-ghost" onclick="importBoard()" title="Import a previously exported board (.html or .json)">📥
-      Import</button>
-    <button class="btn btn-ghost" onclick="openPresets()" title="Browse channel presets by category">☰ Presets</button>
+    <!-- Board group: share / export / import / clear -->
+    <div class="tb-group">
+      <button class="btn btn-ghost tb-trigger">⋯ Board ▾</button>
+      <div class="tb-dropdown">
+        <button class="tb-item" onclick="shareBoard()">🔗 Share link</button>
+        <button class="tb-item" onclick="exportHTML()">📤 Export HTML</button>
+        <button class="tb-item" onclick="importBoard()">📥 Import</button>
+        <div class="tb-sep"></div>
+        <button class="tb-item tb-item-danger" onclick="clearAll()">✕ Clear board</button>
+      </div>
+    </div>
+
+    <!-- Device + network chip -->
+    <div class="tb-group" id="tb-device-group">
+      <div class="tb-device-chip" id="net-indicator" title="Device &amp; network info">
+        <span id="net-dot">⚫</span>
+        <span id="tb-device-type-icon">🖥</span>
+        <span id="tb-device-label">Desktop</span>
+      </div>
+      <div class="tb-dropdown tb-dropdown-right">
+        <div class="tb-info-row"><span class="tb-info-label">Type</span><span class="tb-info-val" id="tbd-type">—</span></div>
+        <div class="tb-info-row"><span class="tb-info-label">OS</span><span class="tb-info-val" id="tbd-os">—</span></div>
+        <div class="tb-info-row"><span class="tb-info-label">Screen</span><span class="tb-info-val" id="tbd-screen">—</span></div>
+        <div class="tb-info-row"><span class="tb-info-label">Pixel ratio</span><span class="tb-info-val" id="tbd-dpr">—</span></div>
+        <div class="tb-sep"></div>
+        <div class="tb-info-row"><span class="tb-info-label">Connection</span><span class="tb-info-val" id="tbd-conn">—</span></div>
+        <div class="tb-info-row"><span class="tb-info-label">Downlink</span><span class="tb-info-val" id="tbd-downlink">—</span></div>
+        <div class="tb-info-row"><span class="tb-info-label">Save data</span><span class="tb-info-val" id="tbd-savedata">—</span></div>
+      </div>
+    </div>
+
     <button class="btn btn-ghost" id="help-btn" onclick="toggleHelp()">? Compat</button>
-    <button class="btn btn-ghost" onclick="clearAll()" style="color:var(--danger);border-color:var(--danger);">✕
-      Clear</button>
+
     <div id="panel-count">0 panels</div>
   </div>
 
@@ -210,14 +241,14 @@
       </div>
       <div id="presets-body">
         <div id="presets-categories"></div>
-        <div id="presets-detail">
-          <div id="presets-detail-title"></div>
-          <div id="presets-list"></div>
-          <div id="presets-actions">
-            <button class="btn btn-ghost" id="presets-add-btn" onclick="applyPreset(false)">+ Add to board</button>
-            <button class="btn btn-accent" id="presets-load-btn" onclick="applyPreset(true)">⏎ Load preset</button>
-          </div>
+        <div id="presets-content">
+          <div id="presets-desc"></div>
+          <div id="presets-grid"></div>
         </div>
+      </div>
+      <div id="presets-actions">
+        <button class="btn btn-ghost" id="presets-add-btn" onclick="applyPreset(false)">+ Add to board</button>
+        <button class="btn btn-accent" id="presets-load-btn" onclick="applyPreset(true)">⏎ Load preset</button>
       </div>
     </div>
   </div>
@@ -229,7 +260,12 @@
     </div>
   </div>
 
-  <script src="multi-video-board.js"></script>
+  <!-- Load device detection first (module, deferred), expose on window for main script -->
+  <script type="module">
+    import { detectDevice, onChange } from './device-detect.js';
+    window.DeviceDetect = { detectDevice, onChange };
+  </script>
+  <script defer src="multi-video-board.js"></script>
 </body>
 
 </html>

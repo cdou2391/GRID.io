@@ -6,13 +6,102 @@ const canvasInner = document.getElementById('canvas-inner');
 const empty = document.getElementById('empty');
 const panelCount = document.getElementById('panel-count');
 
+// ── NETWORK QUALITY ──
+const netInfo = navigator.connection || navigator.mozConnection || navigator.webkitConnection || null;
+
+function getNetworkQuality() {
+    if (!netInfo) return 'unknown';
+    const t = netInfo.effectiveType;
+    if (t === '4g') return 'fast';
+    if (t === '3g') return 'ok';
+    if (t === '2g' || t === 'slow-2g') return 'slow';
+    return 'unknown';
+}
+
+function isSlowConnection() {
+    const q = getNetworkQuality();
+    if (q === 'slow') return true;
+    if (q === 'unknown') return false;
+    return netInfo && netInfo.downlink != null && netInfo.downlink < 2;
+}
+
+function countActivePanels() {
+    return panels.filter(p => !p.blocked && !p.paused).length;
+}
+
+function shouldPauseNew() {
+    return isSlowConnection() && countActivePanels() >= 2;
+}
+
+function updateNetIndicator() {
+    const indicator = document.getElementById('net-indicator');
+    const dot = document.getElementById('net-dot');
+
+    if (!indicator) return;
+
+    const quality = getNetworkQuality();
+    const MAP = {
+        fast:    { emoji: '🟢', text: 'Fast' },
+        ok:      { emoji: '🟡', text: 'OK'   },
+        slow:    { emoji: '🔴', text: 'Slow' },
+        unknown: { emoji: '⚫', text: '—'    },
+    };
+    const m = MAP[quality] || MAP.unknown;
+    if (dot) dot.textContent = m.emoji;
+    indicator.dataset.quality = quality;
+
+    const et = netInfo?.effectiveType ? netInfo.effectiveType.toUpperCase() : '';
+    const dl = netInfo?.downlink != null ? `${netInfo.downlink} Mbps` : '';
+    indicator.title = [et, dl].filter(Boolean).join(' · ') || 'Network quality unknown';
+
+    if (quality === 'slow' || (netInfo?.downlink != null && netInfo.downlink < 2)) {
+        enableOffscreenObserver();
+    } else {
+        disableOffscreenObserver();
+    }
+}
+
+if (netInfo) netInfo.addEventListener('change', updateNetIndicator);
+
+// ── OFFSCREEN OBSERVER ──
+let offscreenObserver = null;
+
+function enableOffscreenObserver() {
+    if (offscreenObserver) return;
+    offscreenObserver = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+            const id = parseInt(entry.target.id.replace('vp-', ''));
+            const p = panels.find(p => p.id === id);
+            if (!p || p.blocked || p.pinned) return;
+            if (!entry.isIntersecting) {
+                pausePanel(id);
+            } else if (p.paused) {
+                resumePanel(id);
+            }
+        });
+    }, { root: canvas, rootMargin: '80px', threshold: 0 });
+
+    panels.forEach(p => {
+        const el = document.getElementById('vp-' + p.id);
+        if (el && !p.blocked) offscreenObserver.observe(el);
+    });
+}
+
+function disableOffscreenObserver() {
+    if (!offscreenObserver) return;
+    offscreenObserver.disconnect();
+    offscreenObserver = null;
+    // Resume all panels that were paused by the observer
+    panels.forEach(p => { if (p.paused && !p.blocked) resumePanel(p.id); });
+}
+
 // ── LOCAL STORAGE ──
 const LS_KEY = 'gridio_board';
 const LS_LAYOUTS = 'gridio_layouts';
 
 function saveState() {
     try {
-        const state = { panels: panels.map(p => ({ ...p, focused: false })), nextId, zTop };
+        const state = { panels: panels.map(p => ({ ...p, focused: false, paused: false })), nextId, zTop };
         localStorage.setItem(LS_KEY, JSON.stringify(state));
     } catch (e) { /* storage full / private mode */ }
 }
@@ -350,11 +439,19 @@ function convertToEmbed(url, muted = false, autoplay = false) {
 
     // Twitch VOD
     const tvod = url.match(/twitch\.tv\/videos\/(\d+)/);
-    if (tvod) return `https://player.twitch.tv/?video=${tvod[1]}&parent=${location.hostname || 'localhost'}`;
+    if (tvod) {
+      const host = location.hostname || 'localhost';
+      const parents = [...new Set([host, 'localhost', '127.0.0.1'])].map(h => `parent=${h}`).join('&');
+      return `https://player.twitch.tv/?video=${tvod[1]}&${parents}&muted=${muted}&autoplay=${autoplay}`;
+    }
 
     // Twitch channel
     const tch = url.match(/twitch\.tv\/([a-zA-Z0-9_]+)$/);
-    if (tch) return `https://player.twitch.tv/?channel=${tch[1]}&parent=${location.hostname || 'localhost'}`;
+    if (tch) {
+      const host = location.hostname || 'localhost';
+      const parents = [...new Set([host, 'localhost', '127.0.0.1'])].map(h => `parent=${h}`).join('&');
+      return `https://player.twitch.tv/?channel=${tch[1]}&${parents}&muted=${muted}&autoplay=${autoplay}`;
+    }
 
     // Spotify embed
     if (url.includes('open.spotify.com') && !url.includes('/embed/')) {
@@ -369,7 +466,36 @@ function convertToEmbed(url, muted = false, autoplay = false) {
 }
 
 function supportsEmbedMute(url) {
-    return /youtube\.com|youtu\.be|vimeo\.com/.test(url);
+    return /youtube\.com|youtu\.be|vimeo\.com|twitch\.tv/.test(url);
+}
+
+// Patch mute/autoplay params directly on an embed URL without re-deriving it from
+// the raw URL (handle URLs like @Channel/live cannot be re-converted).
+function setEmbedParams(url, { muted, autoplay } = {}) {
+    const isTwitch = url.includes('player.twitch.tv');
+
+    if (muted !== undefined) {
+        // YouTube uses  mute=0/1 ; Vimeo uses muted=0/1 ; Twitch uses muted=true/false
+        const val = isTwitch ? String(muted) : (muted ? 1 : 0);
+        if (!isTwitch && /[?&]mute=/.test(url)) {
+            url = url.replace(/([?&]mute=)[^&]+/, `$1${val}`);
+        } else if (/[?&]muted=/.test(url)) {
+            url = url.replace(/([?&]muted=)[^&]+/, `$1${val}`);
+        } else {
+            url += `&${isTwitch ? 'muted' : 'mute'}=${val}`;
+        }
+    }
+
+    if (autoplay !== undefined) {
+        const val = isTwitch ? String(autoplay) : (autoplay ? 1 : 0);
+        if (/[?&]autoplay=/.test(url)) {
+            url = url.replace(/([?&]autoplay=)[^&]+/, `$1${val}`);
+        } else {
+            url += `&autoplay=${val}`;
+        }
+    }
+
+    return url;
 }
 
 // ── OVERLAP UTILS ──
@@ -456,14 +582,25 @@ function addPanel() {
 
     const label = titleInput.value.trim() || guessTitle(raw);
     const blocked = detectBlocked(raw);
-    const embedUrl = blocked ? null : convertToEmbed(raw);
+    const embedUrl = blocked ? null : convertToEmbed(raw, true, true);
+
+    // Warn if Twitch is added while running from file:// (parent= can never match)
+    if (!blocked && /twitch\.tv/.test(raw) && location.protocol === 'file:') {
+        showToast('⚠ Twitch requires a local server — run: npx serve .', true);
+    }
+
+    // Warn if adding 4th+ stream on a slow connection
+    if (!blocked && getNetworkQuality() === 'slow' && panels.filter(p => !p.blocked).length >= 3) {
+        showToast('⚠ Your connection may struggle with this many streams.', true);
+    }
 
     const id = nextId++;
     const isTikTok = /tiktok\.com/.test(raw);
     const w = isTikTok ? 325 : 480;
     const h = isTikTok ? 580 : 310;
     const { x, y } = findFreePosition(w, h);
-    const panel = { id, label, raw, embedUrl, blocked, x, y, w, h, z: ++zTop, pinned: false, muted: false, tag: null };
+    const paused = !blocked && shouldPauseNew();
+    const panel = { id, label, raw, embedUrl, blocked, x, y, w, h, z: ++zTop, pinned: false, muted: true, tag: null, paused };
 
     panels.push(panel);
     renderPanel(panel);
@@ -484,8 +621,10 @@ function guessTitle(url) {
 }
 
 function removePanel(id) {
+    const el = document.getElementById('vp-' + id);
+    if (el && offscreenObserver) offscreenObserver.unobserve(el);
     panels = panels.filter(p => p.id !== id);
-    document.getElementById('vp-' + id)?.remove();
+    el?.remove();
     updateCount();
     saveState();
     if (panels.length === 0) empty.style.display = '';
@@ -506,11 +645,18 @@ function clearAll() {
 
 // ── RENDER PANEL ──
 function renderPanel(p) {
+    // Twitch embed URLs contain parent= which must match the current hostname.
+    // Always recompute from raw URL so stale localStorage values can't cause Error #2000.
+    // autoplay must be true for Twitch to establish the stream connection (false causes #2000).
+    if (p.raw && /twitch\.tv/.test(p.raw) && !p.blocked) {
+        p.embedUrl = convertToEmbed(p.raw, p.muted || false, !p.paused);
+    }
     const el = document.createElement('div');
     el.className = 'vp';
     el.id = 'vp-' + p.id;
     el.style.cssText = `left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${p.h}px;z-index:${p.z}`;
 
+    const twitchFileBlocked = !p.blocked && /twitch\.tv/.test(p.raw || '') && location.protocol === 'file:';
     const bodyContent = p.blocked
         ? `<div class="vp-blocked">
     <div class="icon">🔒</div>
@@ -518,6 +664,15 @@ function renderPanel(p) {
     <div class="msg">This service blocks embedding in external pages.<br>Open it directly in a new tab instead.</div>
     <button class="btn btn-ghost" style="font-size:11px;padding:5px 12px;" onclick="window.open('${p.raw}','_blank')">Open in Tab ↗</button>
   </div>`
+        : twitchFileBlocked
+        ? `<div class="vp-blocked">
+    <div class="icon">📡</div>
+    <div class="service">Twitch</div>
+    <div class="msg">Twitch embeds require a local server.<br>Run <code style="font-size:10px;background:rgba(255,255,255,.1);padding:1px 5px;border-radius:3px;">npx serve .</code> and reopen from localhost.</div>
+    <button class="btn btn-ghost" style="font-size:11px;padding:5px 12px;" onclick="window.open('${p.raw}','_blank')">Open in Tab ↗</button>
+  </div>`
+        : p.paused
+        ? buildPlaceholder(p.id, p.label)
         : `<iframe src="${p.embedUrl}" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
 
     const tagStyle = p.tag ? `color:${p.tag}` : 'color:var(--text-dim)';
@@ -550,11 +705,46 @@ function renderPanel(p) {
     makeResizable(el, document.getElementById('rsz-' + p.id), p);
     bringToFront(el, p);
     if (p.pinned) el.classList.add('pinned');
+    if (p.paused) el.classList.add('paused');
     applyTag(p);
+    if (offscreenObserver && !p.blocked) offscreenObserver.observe(el);
 }
 
 function escHtml(s) {
     return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// ── PAUSE / RESUME PANELS ──
+function buildPlaceholder(id, label) {
+    return `<div class="vp-placeholder" onclick="resumePanel(${id})">
+      <div class="vp-placeholder-icon">▶</div>
+      <div class="vp-placeholder-label">${escHtml(label)}</div>
+      <div class="vp-placeholder-hint">Click to load</div>
+    </div>`;
+}
+
+function pausePanel(id) {
+    const p = panels.find(p => p.id === id);
+    if (!p || p.blocked || p.paused) return;
+    p.paused = true;
+    const el = document.getElementById('vp-' + id);
+    if (el) el.classList.add('paused');
+    const body = document.querySelector(`#vp-${id} .vp-body`);
+    if (body) body.innerHTML = buildPlaceholder(id, p.label);
+}
+
+function resumePanel(id) {
+    const p = panels.find(p => p.id === id);
+    if (!p || p.blocked || !p.paused) return;
+    p.paused = false;
+    const el = document.getElementById('vp-' + id);
+    if (el) el.classList.remove('paused');
+    const body = document.querySelector(`#vp-${id} .vp-body`);
+    if (body && p.embedUrl) {
+        body.innerHTML = `<iframe src="${p.embedUrl}" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+    }
+    // Re-observe so offscreen pausing continues to work
+    if (offscreenObserver && el) offscreenObserver.observe(el);
 }
 
 // ── MUTE / UNMUTE ──
@@ -566,7 +756,7 @@ function toggleMute(id) {
         return;
     }
     p.muted = !p.muted;
-    p.embedUrl = convertToEmbed(p.raw, p.muted);
+    p.embedUrl = setEmbedParams(p.embedUrl, { muted: p.muted });
     const body = document.querySelector(`#vp-${id} .vp-body`);
     if (body) {
         body.innerHTML = `<iframe src="${p.embedUrl}" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
@@ -684,6 +874,32 @@ function togglePin(id) {
 
 // ── FOCUS ──
 // ── THEATER MODE ──
+function unmutePanel(id) {
+    const p = panels.find(p => p.id === id);
+    if (!p || p.blocked || !p.muted) return;
+    if (!supportsEmbedMute(p.raw)) return;
+    p.muted = false;
+    p.embedUrl = setEmbedParams(p.embedUrl, { muted: false, autoplay: true });
+    const body = document.querySelector(`#vp-${id} .vp-body`);
+    if (body) body.innerHTML = `<iframe src="${p.embedUrl}" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+    const btn = document.getElementById('mute-' + id);
+    if (btn) { btn.textContent = '🔊'; btn.title = 'Mute'; btn.classList.remove('active'); }
+    saveState();
+}
+
+function mutePanel(id) {
+    const p = panels.find(p => p.id === id);
+    if (!p || p.blocked || p.muted) return;
+    if (!supportsEmbedMute(p.raw)) return;
+    p.muted = true;
+    p.embedUrl = setEmbedParams(p.embedUrl, { muted: true });
+    const body = document.querySelector(`#vp-${id} .vp-body`);
+    if (body) body.innerHTML = `<iframe src="${p.embedUrl}" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media; accelerometer; gyroscope" referrerpolicy="no-referrer-when-downgrade"></iframe>`;
+    const btn = document.getElementById('mute-' + id);
+    if (btn) { btn.textContent = '🔇'; btn.title = 'Unmute'; btn.classList.add('active'); }
+    saveState();
+}
+
 function enterFocusMode(id) {
     const sidebar = document.getElementById('focus-sidebar');
     panels.forEach(pan => {
@@ -694,6 +910,7 @@ function enterFocusMode(id) {
             el.classList.add('theater-main');
             bringToFront(el, pan);
         } else {
+            mutePanel(pan.id);
             sidebar.appendChild(el);
             const overlay = document.createElement('div');
             overlay.className = 'sidebar-click-overlay';
@@ -702,6 +919,7 @@ function enterFocusMode(id) {
         }
     });
     sidebar.classList.add('open');
+    unmutePanel(id);
     saveState();
 }
 
@@ -730,6 +948,7 @@ function swapFocusMain(newId) {
     if (!newMain) return;
 
     if (currentMain) {
+        mutePanel(currentMain.id);
         currentMain.focused = false;
         const currentEl = document.getElementById('vp-' + currentMain.id);
         if (currentEl) {
@@ -750,6 +969,7 @@ function swapFocusMain(newId) {
         canvasInner.appendChild(newEl);
         bringToFront(newEl, newMain);
     }
+    unmutePanel(newId);
     saveState();
 }
 
@@ -931,9 +1151,9 @@ async function openPresets() {
         renderPresetCategories();
         if (presetsData.length > 0) selectPresetCategory(presetsData[0]);
     } catch (e) {
-        document.getElementById('presets-categories').innerHTML =
+        document.getElementById('presets-content').innerHTML =
             `<div class="presets-error">Could not load presets.json.<br>Make sure you are running on a local server (e.g. <code>npx serve .</code>).</div>`;
-        document.getElementById('presets-detail').classList.add('empty');
+        document.getElementById('presets-actions').style.display = 'none';
     }
 }
 
@@ -941,12 +1161,20 @@ function closePresets() {
     document.getElementById('presets-modal').classList.remove('open');
 }
 
+function guessPlatform(url) {
+    if (/youtube\.com|youtu\.be/.test(url)) return 'YouTube';
+    if (/twitch\.tv/.test(url)) return 'Twitch';
+    if (/vimeo\.com/.test(url)) return 'Vimeo';
+    if (/tiktok\.com/.test(url)) return 'TikTok';
+    if (/spotify\.com/.test(url)) return 'Spotify';
+    if (/dailymotion\.com/.test(url)) return 'Dailymotion';
+    return '';
+}
+
 function renderPresetCategories() {
-    const container = document.getElementById('presets-categories');
-    container.innerHTML = presetsData.map(cat => `
-        <button class="preset-cat-btn" id="pcat-${cat.id}" onclick="selectPresetCategory(presetsData.find(c=>c.id==='${cat.id}'))">
-            <span class="cat-icon">${cat.icon}</span>
-            <span>${cat.label}</span>
+    document.getElementById('presets-categories').innerHTML = presetsData.map(cat => `
+        <button class="preset-cat-item" id="pcat-${cat.id}" onclick="selectPresetCategory(presetsData.find(c=>c.id==='${cat.id}'))">
+            <span>${cat.icon} ${cat.label}</span>
             <span class="cat-count">${cat.panels.length}</span>
         </button>`).join('');
 }
@@ -954,19 +1182,25 @@ function renderPresetCategories() {
 function selectPresetCategory(cat) {
     if (!cat) return;
     activePresetCategory = cat;
-    // Highlight active
-    document.querySelectorAll('.preset-cat-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.preset-cat-item').forEach(b => b.classList.remove('active'));
     document.getElementById('pcat-' + cat.id)?.classList.add('active');
-    // Render detail
-    document.getElementById('presets-detail-title').textContent = `${cat.icon}  ${cat.label} — ${cat.description}`;
-    document.getElementById('presets-list').innerHTML = cat.panels.map(p =>
-        `<div class="preset-panel-row"><span class="preset-dot"></span>${escHtml(p.label)}</div>`
-    ).join('');
-    document.getElementById('presets-detail').classList.remove('empty');
+    document.getElementById('presets-desc').textContent = `${cat.icon}  ${cat.label} — ${cat.description}`;
+    document.getElementById('presets-grid').innerHTML = cat.panels.map(p => `
+        <div class="preset-channel-card">
+            <div class="preset-channel-dot"></div>
+            <div class="preset-channel-info">
+                <div class="preset-channel-name">${escHtml(p.label)}</div>
+                <div class="preset-channel-platform">${guessPlatform(p.url)}</div>
+            </div>
+        </div>`).join('');
 }
 
 function applyPreset(replace) {
     if (!activePresetCategory) return;
+
+    // Close immediately so the confirm modal (same z-index) isn't hidden behind the presets modal
+    closePresets();
+
     const doLoad = () => {
         if (replace) {
             panels.forEach(p => document.getElementById('vp-' + p.id)?.remove());
@@ -989,23 +1223,23 @@ function applyPreset(replace) {
             const isTikTok = /tiktok\.com/.test(item.url);
             const w = isTikTok ? 325 : 480, h = isTikTok ? 580 : 310;
             const { x, y } = findFreePosition(w, h);
-            const panel = { id, label: item.label, raw: item.url, embedUrl, blocked, x, y, w, h, z: ++zTop, pinned: false, muted: true, tag: null, focused: false };
+            const paused = !blocked && shouldPauseNew();
+            const panel = { id, label: item.label, raw: item.url, embedUrl, blocked, x, y, w, h, z: ++zTop, pinned: false, muted: true, tag: null, focused: false, paused };
             panels.push(panel);
             renderPanel(panel);
         });
         updateCount();
         saveState();
         empty.style.display = 'none';
-        closePresets();
         tileAll();
-        showToast(`${activePresetCategory.icon} ${activePresetCategory.label} loaded`);
+        const pausedCount = panels.filter(p => p.paused).length;
+        const msg = pausedCount > 0
+            ? `${activePresetCategory.icon} ${activePresetCategory.label} loaded — ${pausedCount} paused (slow connection)`
+            : `${activePresetCategory.icon} ${activePresetCategory.label} loaded`;
+        showToast(msg);
     };
 
-    if (replace && panels.length > 0) {
-        showConfirmModal(`Replace the current board with "${activePresetCategory.label}"?`, doLoad);
-    } else {
-        doLoad();
-    }
+    doLoad();
 }
 
 // Close presets modal on backdrop click or Escape
@@ -1013,9 +1247,37 @@ document.getElementById('presets-modal').addEventListener('click', e => {
     if (e.target === document.getElementById('presets-modal')) closePresets();
 });
 
+// ── DEVICE CHIP ──
+const DEVICE_ICONS = { tv: '📺', phone: '📱', tablet: '🖥', desktop: '🖥' };
+const OS_LABELS    = { tizen: 'Tizen (Samsung)', webos: 'webOS (LG)', android: 'Android', ios: 'iOS', windows: 'Windows', macos: 'macOS', linux: 'Linux', unknown: 'Unknown' };
+
+function renderDeviceChip() {
+    const info = window.DeviceDetect?.detectDevice();
+    const typeIcon  = document.getElementById('tb-device-type-icon');
+    const typeLabel = document.getElementById('tb-device-label');
+    if (typeIcon)  typeIcon.textContent  = DEVICE_ICONS[info?.type] ?? '🖥';
+    if (typeLabel) typeLabel.textContent = info ? (info.type.charAt(0).toUpperCase() + info.type.slice(1)) : 'Desktop';
+
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set('tbd-type',     info ? (info.type.charAt(0).toUpperCase() + info.type.slice(1)) : '—');
+    set('tbd-os',       info ? (OS_LABELS[info.os] ?? info.os) : '—');
+    set('tbd-screen',   info ? `${info.screenWidth} × ${info.screenHeight}` : '—');
+    set('tbd-dpr',      info ? `${info.pixelRatio}×` : '—');
+    set('tbd-conn',     info ? info.connectionType.toUpperCase() : '—');
+    set('tbd-downlink', info?.downlink != null ? `${info.downlink} Mbps` : '—');
+    set('tbd-savedata', info ? (info.saveData ? 'On' : 'Off') : '—');
+}
+
+// Re-render device dropdown whenever network conditions change
+if (window.DeviceDetect) {
+    window.DeviceDetect.onChange(() => { renderDeviceChip(); updateNetIndicator(); });
+}
+
 // ── BOOT ──
 (function boot() {
     refreshLayoutsSelect();
+    updateNetIndicator();
+    renderDeviceChip();
 
     // Priority: Embedded preload → URL param → localStorage → demo
     if (window.__GRIDIO_PRELOAD__) {
